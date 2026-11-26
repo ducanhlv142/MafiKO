@@ -54,6 +54,38 @@
   <button id="export-backup" type="button" disabled>Tải bản sao lưu JSON</button>
   <button id="export-csv" type="button" disabled>Xuất CSV</button>
   <p id="csv-status" role="status"></p>
+  <hr>
+
+  <h2>Nhập giao dịch từ CSV</h2>
+
+  <input id="csv-file" type="file" accept=".csv,text/csv">
+
+  <p id="csv-import-status" role="status"></p>
+
+  <table id="csv-preview" border="1" cellpadding="6" hidden>
+    <thead>
+      <tr>
+        <th>Dòng</th>
+        <th>Ngày</th>
+        <th>Loại</th>
+        <th>Tài khoản nguồn</th>
+        <th>Tài khoản đích</th>
+        <th>Số tiền</th>
+        <th>Tiền tệ</th>
+        <th>Nội dung</th>
+        <th>Trạng thái</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <ul id="csv-import-errors"></ul>
+
+  <button id="import-csv" type="button" disabled>
+    Xác nhận nhập CSV
+  </button>
+
+  <hr>
   <p id="backup-status" role="status"></p>
   <p>
     <label>Chọn bản sao để khôi phục

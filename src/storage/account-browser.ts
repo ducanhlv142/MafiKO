@@ -4,6 +4,10 @@ import { createBackup } from "./backup.js";
 import type { FinanceBackup } from "./backup";
 import { parseBackup, restoreBackup } from "./restore.js";
 import { createLedgerCsv } from "./export-csv.js";
+import { prepareCsvImport } from "./import-csv.js";
+import { detectDuplicates } from "./detect-duplicates.js";
+import { commitCsvImport } from "./commit-csv.js";
+import type { ImportRow } from "./import-csv";
 
 const form = document.querySelector<HTMLFormElement>("#account-form")!;
 const dateInput = document.querySelector<HTMLInputElement>("#opening-date")!;
@@ -116,6 +120,205 @@ async function start() {
           : "Xuất CSV thất bại.";
     } finally {
       csvButton.disabled = false;
+    }
+  };
+
+  const csvFile =
+    document.querySelector<HTMLInputElement>("#csv-file")!;
+
+  const csvImportStatus =
+    document.querySelector<HTMLElement>("#csv-import-status")!;
+
+  const csvPreview =
+    document.querySelector<HTMLTableElement>("#csv-preview")!;
+
+  const csvPreviewBody = csvPreview.tBodies[0];
+
+  const csvImportErrors =
+    document.querySelector<HTMLUListElement>("#csv-import-errors")!;
+
+  const importCsvButton =
+    document.querySelector<HTMLButtonElement>("#import-csv")!;
+
+  let csvReadVersion = 0;
+
+  let pendingCsv: {
+    content: string;
+    rows: ImportRow[];
+  } | null = null;
+
+  csvFile.onchange = async () => {
+    const version = ++csvReadVersion;
+    pendingCsv = null;
+    const file = csvFile.files?.[0];
+
+    csvPreview.hidden = true;
+    csvPreviewBody.replaceChildren();
+    csvImportErrors.replaceChildren();
+    csvImportStatus.textContent = "";
+    importCsvButton.disabled = true;
+
+    if (!file) return;
+
+    try {
+      csvImportStatus.textContent = "Đang kiểm tra CSV...";
+
+      const content = await file.text();
+      const backup = await createBackup(db);
+
+      if (version !== csvReadVersion) return;
+
+      const result = prepareCsvImport(
+        content,
+        backup.accounts
+      );
+
+      const duplicates = detectDuplicates(
+        result.rows,
+        backup
+      );
+
+      const newCount = result.rows.length - duplicates.size;
+      if (result.errors.length === 0 && newCount > 0) {
+        pendingCsv = {
+          content,
+          rows: result.rows.filter(
+            row => !duplicates.has(row.rowNumber)
+          ),
+        };
+
+        importCsvButton.disabled = false;
+      }
+
+      const accounts = new Map(
+        backup.accounts.map(a => [a.id, a])
+      );
+
+      for (const row of result.rows) {
+        const tr = csvPreviewBody.insertRow();
+
+        let values: (string | number)[];
+
+        if (row.type === "transfer") {
+          const t = row.data;
+
+          values = [
+            row.rowNumber,
+            t.date,
+            "Chuyển tiền",
+            accounts.get(t.fromAccountId)!.name,
+            accounts.get(t.toAccountId)!.name,
+            t.amountMinor.toLocaleString("vi-VN"),
+            t.currency,
+            t.note,
+          ];
+        } else {
+          const t = row.data;
+          const account = accounts.get(t.accountId)!;
+
+          values = [
+            row.rowNumber,
+            t.date,
+            t.kind === "income" ? "Thu" : "Chi",
+            t.kind === "expense" ? account.name : "",
+            t.kind === "income" ? account.name : "",
+            t.amountMinor.toLocaleString("vi-VN"),
+            account.currency,
+            t.note,
+          ];
+        }
+
+        for (const value of values) {
+          tr.insertCell().textContent = String(value);
+        }
+
+        const duplicate = duplicates.get(row.rowNumber);
+
+        const statusCell = tr.insertCell();
+
+        statusCell.textContent = duplicate ?? "Giao dịch mới";
+
+        statusCell.style.color = duplicate
+          ? "#b45309"
+          : "#15803d";
+
+      }
+
+      for (const error of result.errors) {
+        const li = document.createElement("li");
+
+        li.textContent =
+          `Dòng ${error.rowNumber}: ${error.message}`;
+
+        csvImportErrors.append(li);
+      }
+
+      csvPreview.hidden = result.rows.length === 0;
+
+      csvImportStatus.textContent =
+        `${file.name} · ` +
+        `${result.rows.length} giao dịch hợp lệ · ` +
+        `${newCount} giao dịch mới · ` +
+        `${duplicates.size} nghi trùng · ` +
+        `${result.errors.length} lỗi.`;
+
+    } catch (error) {
+      if (version !== csvReadVersion) return;
+
+      csvImportStatus.textContent =
+        error instanceof Error
+          ? error.message
+          : "Không đọc được file CSV.";
+    }
+  };
+
+  importCsvButton.onclick = async () => {
+    const pending = pendingCsv;
+
+    if (!pending) return;
+
+    const confirmed = window.confirm(
+      `Xác nhận nhập ${pending.rows.length} giao dịch mới vào sổ?`
+    );
+
+    if (!confirmed) return;
+
+    importCsvButton.disabled = true;
+    csvFile.disabled = true;
+
+    csvImportStatus.textContent = "Đang nhập dữ liệu...";
+
+    try {
+      const imported = await commitCsvImport(
+        db,
+        pending.content,
+        pending.rows
+      );
+
+      pendingCsv = null;
+      csvFile.value = "";
+
+      csvPreview.hidden = true;
+      csvPreviewBody.replaceChildren();
+      csvImportErrors.replaceChildren();
+
+      csvImportStatus.textContent =
+        `Đã nhập thành công ${imported} giao dịch mới.`;
+
+    } catch (error) {
+      pendingCsv = null;
+
+      csvImportStatus.textContent =
+        error instanceof Error
+          ? error.message
+          : "Nhập CSV thất bại.";
+
+      csvFile.value = "";
+      csvPreview.hidden = true;
+      csvPreviewBody.replaceChildren();
+
+    } finally {
+      csvFile.disabled = false;
     }
   };
 
