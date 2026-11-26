@@ -3,6 +3,7 @@ import { openDatabase } from "./database.js";
 import { createBackup } from "./backup.js";
 import type { FinanceBackup } from "./backup";
 import { parseBackup, restoreBackup } from "./restore.js";
+import { createLedgerCsv } from "./export-csv.js";
 
 const form = document.querySelector<HTMLFormElement>("#account-form")!;
 const dateInput = document.querySelector<HTMLInputElement>("#opening-date")!;
@@ -70,6 +71,51 @@ async function start() {
         error instanceof Error ? error.message : "Tạo bản sao lưu thất bại.";
     } finally {
       exportButton.disabled = false;
+    }
+  };
+
+  const csvButton =
+    document.querySelector<HTMLButtonElement>("#export-csv")!;
+
+  const csvStatus =
+    document.querySelector<HTMLElement>("#csv-status")!;
+
+  csvButton.disabled = false;
+
+  csvButton.onclick = async () => {
+    csvButton.disabled = true;
+    csvStatus.textContent = "Đang tạo file CSV...";
+
+    try {
+      const backup = await createBackup(db);
+      const csv = createLedgerCsv(backup);
+
+      const blob = new Blob([csv], {
+        type: "text/csv;charset=utf-8",
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download =
+        `mafiko-ledger-${backup.exportedAt.replace(/[:.]/g, "-")}.csv`;
+
+      link.click();
+
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      csvStatus.textContent =
+        `Đã tạo CSV gồm ${backup.transactions.length} giao dịch thu/chi và ` +
+        `${backup.transfers.length} lần chuyển tiền.`;
+
+    } catch (error) {
+      csvStatus.textContent =
+        error instanceof Error
+          ? error.message
+          : "Xuất CSV thất bại.";
+    } finally {
+      csvButton.disabled = false;
     }
   };
 
