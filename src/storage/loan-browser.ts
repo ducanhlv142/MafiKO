@@ -1,11 +1,23 @@
 import type { Account } from "../domain/finance/account";
-import type { LoanDirection } from "../domain/finance/debt";
-
+import type {
+    Loan,
+    LoanPayment,
+    LoanDirection,
+} from "../domain/finance/debt";
+import { mutateDebt } from "./debt-mutation.js";
 import {
     createLoan,
+    createLoanPayment,
+    paymentTotal,
     summarizeLoan,
 } from "../domain/finance/debt.js";
-
+import {
+    saveLoanPayment,
+} from "./loan-payment-storage.js";
+import {
+    estimateLoanInterest,
+    getLoanMaturity,
+} from "../domain/finance/loan-interest.js";
 import { openDatabase } from "./database.js";
 import { createBackup } from "./backup.js";
 import { saveLoan } from "./loan-storage.js";
@@ -52,6 +64,16 @@ const list =
 const status =
     document.querySelector<HTMLElement>("#loan-status")!;
 
+const loanAlerts =
+    document.querySelector<HTMLUListElement>(
+        "#loan-alerts"
+    )!;
+
+const interestDate =
+    document.querySelector<HTMLInputElement>(
+        "#loan-interest-date"
+    )!;
+
 function today(): string {
     const now = new Date();
 
@@ -94,8 +116,96 @@ async function start() {
     let ready = false;
     let refreshVersion = 0;
 
+    const paymentDialog =
+        document.querySelector<HTMLDialogElement>(
+            "#payment-dialog"
+        )!;
+
+    const paymentForm =
+        document.querySelector<HTMLFormElement>(
+            "#payment-form"
+        )!;
+
+    const paymentTitle =
+        document.querySelector<HTMLElement>(
+            "#payment-title"
+        )!;
+
+    const paymentSummary =
+        document.querySelector<HTMLElement>(
+            "#payment-summary"
+        )!;
+
+    const paymentAccount =
+        document.querySelector<HTMLSelectElement>(
+            "#payment-account"
+        )!;
+
+    const paymentPrincipal =
+        document.querySelector<HTMLInputElement>(
+            "#payment-principal"
+        )!;
+
+    const paymentInterest =
+        document.querySelector<HTMLInputElement>(
+            "#payment-interest"
+        )!;
+
+    const paymentFee =
+        document.querySelector<HTMLInputElement>(
+            "#payment-fee"
+        )!;
+
+    const paymentDate =
+        document.querySelector<HTMLInputElement>(
+            "#payment-date"
+        )!;
+
+    const paymentNote =
+        document.querySelector<HTMLInputElement>(
+            "#payment-note"
+        )!;
+
+    const paymentTotalText =
+        document.querySelector<HTMLElement>(
+            "#payment-total"
+        )!;
+
+    const paymentStatus =
+        document.querySelector<HTMLElement>(
+            "#payment-status"
+        )!;
+
+    const paymentHistory =
+        document.querySelector<HTMLUListElement>(
+            "#payment-history"
+        )!;
+
+    const paymentSave =
+        document.querySelector<HTMLButtonElement>(
+            "#payment-save"
+        )!;
+
+    const paymentCancel =
+        document.querySelector<HTMLButtonElement>(
+            "#payment-cancel"
+        )!;
+
+    let selectedLoan: Loan | null = null;
+
+    let editingLoan: Loan | null = null;
+
+    let editingPayment: LoanPayment | null = null;
+
+    const loanEditCancel =
+        document.querySelector<HTMLButtonElement>(
+            "#loan-edit-cancel"
+        )!;
+
     startInput.value = today();
     startInput.max = today();
+    interestDate.value = today();
+    interestDate.min = today();
 
     function updateDateLimits() {
         const account = accounts.find(
@@ -110,6 +220,351 @@ async function start() {
 
     accountSelect.onchange = updateDateLimits;
     startInput.onchange = updateDateLimits;
+
+    function clearLoanEdit() {
+        editingLoan = null;
+
+        form.reset();
+
+        directionSelect.disabled = false;
+        accountSelect.disabled = false;
+        startInput.disabled = false;
+
+        startInput.value = today();
+        startInput.max = today();
+
+        rateInput.value = "0";
+
+        saveButton.textContent = "Lưu khoản vay";
+
+        loanEditCancel.hidden = true;
+
+        updateDateLimits();
+    }
+
+    function openLoanEdit(loan: Loan) {
+        if (writing || !ready) return;
+
+        editingLoan = loan;
+
+        directionSelect.value = loan.direction;
+
+        counterpartyInput.value =
+            loan.counterparty;
+
+        accountSelect.value =
+            loan.accountId;
+
+        principalInput.value =
+            String(loan.principalMinor);
+
+        rateInput.value =
+            String(loan.annualRateBps / 100);
+
+        startInput.value =
+            loan.startDate;
+
+        dueInput.value =
+            loan.dueDate ?? "";
+
+        noteInput.value =
+            loan.note;
+
+        directionSelect.disabled = true;
+        accountSelect.disabled = true;
+        startInput.disabled = true;
+
+        saveButton.textContent = "Cập nhật khoản vay";
+
+        loanEditCancel.hidden = false;
+
+        updateDateLimits();
+
+        form.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+        });
+
+        counterpartyInput.focus();
+
+        status.textContent =
+            `Đang chỉnh sửa: ${loan.counterparty}`;
+    }
+
+    loanEditCancel.onclick = () => {
+        if (writing) return;
+
+        clearLoanEdit();
+
+        status.textContent =
+            "Đã hủy chỉnh sửa.";
+    };
+
+    function updatePaymentTotal() {
+        if (!selectedLoan) return;
+
+        const total =
+            Number(paymentPrincipal.value) +
+            Number(paymentInterest.value) +
+            Number(paymentFee.value);
+
+        paymentTotalText.textContent =
+            `Tổng thanh toán: ${total.toLocaleString("vi-VN")} ` +
+            selectedLoan.currency;
+    }
+
+    function updatePaymentDateLimits() {
+        if (!selectedLoan) return;
+
+        const account = accounts.find(
+            a => a.id === paymentAccount.value
+        );
+
+        paymentDate.min =
+            account &&
+                account.openingBalanceDate > selectedLoan.startDate
+                ? account.openingBalanceDate
+                : selectedLoan.startDate;
+
+        paymentDate.max = today();
+    }
+
+    function openPayment(
+        loan: Loan,
+        payments: readonly LoanPayment[]
+    ) {
+        if (writing || !ready) return;
+
+        selectedLoan = loan;
+
+        editingPayment = null;
+
+        paymentSave.textContent =
+            "Xác nhận thanh toán";
+
+        const summary = summarizeLoan(
+            loan,
+            payments
+        );
+
+        const borrowed =
+            loan.direction === "borrowed";
+
+        const money = (value: number) =>
+            `${value.toLocaleString("vi-VN")} ${loan.currency}`;
+
+        paymentForm.reset();
+
+        paymentStatus.textContent = "";
+
+        paymentTitle.textContent = borrowed
+            ? `Trả nợ · ${loan.counterparty}`
+            : `Thu hồi nợ · ${loan.counterparty}`;
+
+        paymentSummary.textContent =
+            `Gốc còn lại: ${money(summary.remainingPrincipalMinor)} · ` +
+            `Lãi đã thanh toán: ${money(summary.interestPaidMinor)} · ` +
+            `Phí đã thanh toán: ${money(summary.feePaidMinor)}`;
+
+        paymentPrincipal.max =
+            String(summary.remainingPrincipalMinor);
+
+        paymentAccount.replaceChildren();
+
+        for (const account of accounts) {
+            if (account.currency !== loan.currency) continue;
+
+            paymentAccount.add(
+                new Option(
+                    `${account.name} · ${account.currency}`,
+                    account.id
+                )
+            );
+        }
+
+        paymentAccount.value = loan.accountId;
+
+        paymentDate.value = today();
+
+        updatePaymentDateLimits();
+        updatePaymentTotal();
+
+        paymentHistory.replaceChildren();
+
+        const history = payments
+            .filter(p => p.loanId === loan.id)
+            .sort((a, b) => b.date.localeCompare(a.date));
+
+        for (const payment of history) {
+            const item = document.createElement("li");
+
+            item.textContent =
+                `${payment.date} · ` +
+                `Gốc: ${money(payment.principalMinor)} · ` +
+                `Lãi: ${money(payment.interestMinor)} · ` +
+                `Phí: ${money(payment.feeMinor)} · ` +
+                `Tổng: ${money(paymentTotal(payment))}` +
+                (payment.note ? ` · ${payment.note}` : "");
+
+            const editButton =
+                document.createElement("button");
+
+            editButton.type = "button";
+            editButton.textContent = "Sửa";
+            editButton.style.color = "#2563eb";
+            editButton.style.marginLeft = "8px";
+
+            editButton.onclick = () => {
+                if (writing) return;
+
+                editingPayment = payment;
+
+                paymentAccount.value =
+                    payment.accountId;
+
+                paymentPrincipal.value =
+                    String(payment.principalMinor);
+
+                paymentInterest.value =
+                    String(payment.interestMinor);
+
+                paymentFee.value =
+                    String(payment.feeMinor);
+
+                paymentDate.value =
+                    payment.date;
+
+                paymentNote.value =
+                    payment.note;
+
+                paymentPrincipal.max = String(
+                    summary.remainingPrincipalMinor +
+                    payment.principalMinor
+                );
+
+                paymentTitle.textContent =
+                    `Sửa thanh toán · ${loan.counterparty}`;
+
+                paymentSave.textContent =
+                    "Cập nhật thanh toán";
+
+                paymentStatus.textContent =
+                    "Đang chỉnh sửa thanh toán.";
+
+                updatePaymentDateLimits();
+                updatePaymentTotal();
+
+                paymentPrincipal.focus();
+            };
+
+            const deleteButton =
+                document.createElement("button");
+
+            deleteButton.type = "button";
+            deleteButton.textContent = "Xóa";
+            deleteButton.style.color = "#dc2626";
+            deleteButton.style.marginLeft = "8px";
+
+            deleteButton.onclick = async () => {
+                if (writing) return;
+
+                const confirmed = window.confirm(
+                    `Xóa thanh toán ngày ${payment.date}?\n\n` +
+
+                    `Tổng tiền: ${money(paymentTotal(payment))}\n\n` +
+
+                    "Số dư, dư nợ và báo cáo thu chi sẽ được tính lại.\n" +
+
+                    "Thao tác không thể hoàn tác."
+                );
+
+                if (!confirmed) return;
+
+                writing = true;
+
+                paymentSave.disabled = true;
+                paymentCancel.disabled = true;
+                saveButton.disabled = true;
+                currencySelect.disabled = true;
+
+                try {
+                    await mutateDebt(
+                        db,
+                        loan,
+                        {
+                            kind: "deletePayment",
+                            expected: payment,
+                        },
+                        today()
+                    );
+
+                    paymentDialog.close();
+
+                    try {
+                        await refresh();
+
+                        status.textContent =
+                            "Đã xóa thanh toán.";
+
+                    } catch {
+                        status.textContent =
+                            "Đã xóa nhưng chưa tải lại được dữ liệu.";
+                    }
+
+                } catch (error) {
+                    paymentStatus.textContent =
+                        error instanceof Error
+                            ? error.message
+                            : "Xóa thanh toán thất bại.";
+
+                } finally {
+                    writing = false;
+
+                    paymentSave.disabled = false;
+                    paymentCancel.disabled = false;
+                    currencySelect.disabled = false;
+                    saveButton.disabled = !ready;
+                }
+            };
+
+            item.append(editButton, deleteButton);
+
+            paymentHistory.append(item);
+        }
+
+        if (history.length === 0) {
+            const item = document.createElement("li");
+
+            item.textContent = "Chưa có thanh toán.";
+
+            paymentHistory.append(item);
+        }
+
+        paymentDialog.showModal();
+    }
+
+    paymentPrincipal.oninput = updatePaymentTotal;
+    paymentInterest.oninput = updatePaymentTotal;
+    paymentFee.oninput = updatePaymentTotal;
+
+    paymentAccount.onchange = updatePaymentDateLimits;
+
+    paymentCancel.onclick = () => {
+        if (!writing) {
+            paymentDialog.close();
+        }
+    };
+
+    paymentDialog.addEventListener("cancel", event => {
+        if (writing) {
+            event.preventDefault();
+        }
+    });
+
+    paymentDialog.addEventListener("close", () => {
+        selectedLoan = null;
+        editingPayment = null;
+    });
 
     async function refresh() {
         const version = ++refreshVersion;
@@ -163,11 +618,42 @@ async function start() {
 
         list.replaceChildren();
 
+        loanAlerts.replaceChildren();
+
+        const currentDate = today();
+
+        interestDate.min = currentDate;
+
+        if (
+            !interestDate.value ||
+            interestDate.value < currentDate
+        ) {
+            interestDate.value = currentDate;
+        }
+
+        const estimateDate = interestDate.value;
+
         for (const loan of loans) {
             const summary = summarizeLoan(
                 loan,
                 backup.loanPayments
             );
+
+            const interest = estimateLoanInterest(
+                loan,
+                backup.loanPayments,
+                estimateDate
+            );
+
+            const maturity = getLoanMaturity(
+                loan,
+                backup.loanPayments,
+                currentDate
+            );
+
+            const progressPercent =
+                summary.principalPaidMinor /
+                loan.principalMinor * 100;
 
             if (loan.direction === "borrowed") {
                 payable += summary.remainingPrincipalMinor;
@@ -199,14 +685,200 @@ async function start() {
 
                 loan.dueDate ?? "Không kỳ hạn",
 
-                summary.status === "settled"
-                    ? "Đã hết nợ gốc"
-                    : "Đang theo dõi",
+                `${progressPercent.toFixed(1)}%`,
+
+                money(interest.estimatedInterestMinor),
+
+                money(interest.interestPaidMinor),
+
+                money(interest.estimatedUnpaidInterestMinor),
+
+                maturity.label,
             ];
 
             for (const value of values) {
                 row.insertCell().textContent = value;
             }
+
+            const progress =
+                document.createElement("progress");
+
+            progress.max = 100;
+
+            progress.value = progressPercent;
+
+            progress.style.width = "120px";
+
+            progress.style.display = "block";
+
+            progress.style.marginTop = "6px";
+
+            progress.style.accentColor = "#16a34a";
+
+            progress.setAttribute(
+                "aria-label",
+                "Tiến độ hoàn trả gốc"
+            );
+
+            row.cells[9].append(progress);
+
+            const maturityCell = row.cells[13];
+
+            switch (maturity.status) {
+                case "overdue":
+                case "dueToday":
+                    maturityCell.style.color = "#dc2626";
+                    maturityCell.style.fontWeight = "bold";
+                    break;
+
+                case "dueSoon":
+                    maturityCell.style.color = "#b45309";
+                    maturityCell.style.fontWeight = "bold";
+                    break;
+
+                case "active":
+                case "settled":
+                    maturityCell.style.color = "#15803d";
+                    break;
+
+                default:
+                    maturityCell.style.color = "#64748b";
+            }
+
+            if (
+                maturity.status === "overdue" ||
+                maturity.status === "dueToday" ||
+                maturity.status === "dueSoon"
+            ) {
+                const item = document.createElement("li");
+
+                const label =
+                    loan.direction === "borrowed"
+                        ? "Nợ phải trả"
+                        : "Khoản phải thu";
+
+                item.textContent =
+                    `${loan.counterparty} · ` +
+                    `${label} · ` +
+                    `${maturity.label} · ` +
+                    `Gốc còn lại: ` +
+                    money(summary.remainingPrincipalMinor);
+
+                item.style.color =
+                    maturity.status === "dueSoon"
+                        ? "#b45309"
+                        : "#dc2626";
+
+                item.style.fontWeight = "bold";
+
+                loanAlerts.append(item);
+            }
+
+            const actions = row.insertCell();
+
+            const paymentButton =
+                document.createElement("button");
+
+            paymentButton.type = "button";
+
+            paymentButton.textContent =
+                loan.direction === "borrowed"
+                    ? "Trả nợ"
+                    : "Thu hồi nợ";
+
+            paymentButton.style.color = "#2563eb";
+
+            paymentButton.onclick = () => {
+                openPayment(
+                    loan,
+                    backup.loanPayments
+                );
+            };
+
+            actions.append(paymentButton);
+
+            const editButton =
+                document.createElement("button");
+
+            editButton.type = "button";
+            editButton.textContent = "Sửa";
+            editButton.style.color = "#2563eb";
+            editButton.style.marginLeft = "8px";
+
+            editButton.onclick = () => {
+                openLoanEdit(loan);
+            };
+
+            const deleteButton =
+                document.createElement("button");
+
+            deleteButton.type = "button";
+            deleteButton.textContent = "Xóa";
+            deleteButton.style.color = "#dc2626";
+            deleteButton.style.marginLeft = "8px";
+
+            deleteButton.onclick = async () => {
+                if (writing || !ready || editingLoan) return;
+
+                if (
+                    backup.loanPayments.some(
+                        p => p.loanId === loan.id
+                    )
+                ) {
+                    status.textContent =
+                        "Không thể xóa khoản vay còn lịch sử thanh toán.";
+
+                    return;
+                }
+
+                const confirmed = window.confirm(
+                    `Xóa khoản vay của ${loan.counterparty}?\n\n` +
+
+                    `Tiền gốc: ${money(loan.principalMinor)}\n\n` +
+
+                    "Biến động tiền ban đầu sẽ bị loại khỏi số dư.\n" +
+
+                    "Thao tác không thể hoàn tác."
+                );
+
+                if (!confirmed) return;
+
+                writing = true;
+
+                saveButton.disabled = true;
+                currencySelect.disabled = true;
+
+                try {
+                    await mutateDebt(
+                        db,
+                        loan,
+                        { kind: "deleteLoan" },
+                        today()
+                    );
+
+                    try {
+                        await refresh();
+
+                        status.textContent =
+                            "Đã xóa khoản vay.";
+
+                    } catch {
+                        status.textContent =
+                            "Đã xóa nhưng chưa tải lại được dữ liệu.";
+                    }
+
+                } catch (error) {
+                    reportError(error);
+
+                } finally {
+                    writing = false;
+
+                    currencySelect.disabled = false;
+                    saveButton.disabled = !ready;
+                }
+            };
+
+            actions.append(editButton, deleteButton);
         }
 
         totals.textContent =
@@ -214,10 +886,21 @@ async function start() {
             `Gốc phải thu: ${money(receivable)} · ` +
             `Giá trị ròng khoản vay: ${money(receivable - payable)}`;
 
+        if (loanAlerts.children.length === 0) {
+            const item = document.createElement("li");
+
+            item.textContent =
+                "Không có khoản vay gốc sắp đến hạn hoặc quá hạn.";
+
+            item.style.color = "#15803d";
+
+            loanAlerts.append(item);
+        }
+
         if (loans.length === 0) {
             const cell = list.insertRow().insertCell();
 
-            cell.colSpan = 10;
+            cell.colSpan = 15;
 
             cell.textContent = "Chưa có khoản vay.";
         }
@@ -238,8 +921,133 @@ async function start() {
                 : "Thao tác thất bại.";
     }
 
+    paymentForm.onsubmit = async event => {
+        event.preventDefault();
+
+        const loan = selectedLoan;
+
+        if (!loan || writing || !ready) return;
+
+        try {
+            const draft = createLoanPayment({
+                loanId: loan.id,
+
+                accountId:
+                    paymentAccount.value,
+
+                principalMinor:
+                    Number(paymentPrincipal.value),
+
+                interestMinor:
+                    Number(paymentInterest.value),
+
+                feeMinor:
+                    Number(paymentFee.value),
+
+                date:
+                    paymentDate.value,
+
+                note:
+                    paymentNote.value.trim(),
+            });
+
+            const original = editingPayment;
+
+            const payment: LoanPayment = original
+                ? {
+                    ...draft,
+                    id: original.id,
+                }
+                : draft;
+
+            const total = paymentTotal(payment);
+
+            const confirmed = window.confirm(
+                `Xác nhận ${loan.direction === "borrowed"
+                    ? "trả nợ"
+                    : "thu hồi nợ"
+                }?\n\n` +
+
+                `Đối tác: ${loan.counterparty}\n` +
+
+                `Tổng tiền: ${total.toLocaleString("vi-VN")} ` +
+                `${loan.currency}\n\n` +
+
+                "Số dư tài khoản sẽ thay đổi."
+            );
+
+            if (!confirmed) return;
+
+            writing = true;
+
+            paymentSave.disabled = true;
+            paymentCancel.disabled = true;
+            saveButton.disabled = true;
+            currencySelect.disabled = true;
+
+            paymentStatus.textContent =
+                "Đang lưu thanh toán...";
+
+            if (original) {
+                await mutateDebt(
+                    db,
+                    loan,
+                    {
+                        kind: "updatePayment",
+                        expected: original,
+                        next: payment,
+                    },
+                    today()
+                );
+            } else {
+                await saveLoanPayment(
+                    db,
+                    payment,
+                    loan,
+                    today()
+                );
+            }
+
+            paymentDialog.close();
+
+            try {
+                await refresh();
+
+                status.textContent = original
+                    ? "Đã cập nhật thanh toán."
+                    : loan.direction === "borrowed"
+                        ? "Đã ghi nhận trả nợ."
+                        : "Đã ghi nhận thu hồi nợ.";
+
+            } catch {
+                status.textContent =
+                    "Đã lưu thanh toán nhưng chưa tải lại được dữ liệu.";
+            }
+
+        } catch (error) {
+            paymentStatus.textContent =
+                error instanceof Error
+                    ? error.message
+                    : "Thanh toán thất bại.";
+
+        } finally {
+            writing = false;
+
+            paymentSave.disabled = false;
+            paymentCancel.disabled = false;
+            currencySelect.disabled = false;
+            saveButton.disabled = !ready;
+        }
+    };
+
     currencySelect.onchange = () => {
         void refresh().catch(reportError);
+    };
+
+    interestDate.onchange = () => {
+        if (!writing) {
+            void refresh().catch(reportError);
+        }
     };
 
     form.onsubmit = async (event) => {
@@ -256,7 +1064,7 @@ async function start() {
                 throw new Error("Hãy chọn tài khoản.");
             }
 
-            const loan = createLoan({
+            const draft = createLoan({
                 direction:
                     directionSelect.value as LoanDirection,
 
@@ -280,18 +1088,24 @@ async function start() {
                 note: noteInput.value.trim(),
             });
 
+            const original = editingLoan;
+
+            const loan: Loan = original
+                ? {
+                    ...draft,
+                    id: original.id,
+                }
+                : draft;
+
             const confirmed = window.confirm(
-                `Xác nhận ${loan.direction === "borrowed"
-                    ? "nhận tiền vay"
-                    : "cho vay"
-                }?\n\n` +
+                `${original ? "Cập nhật" : "Tạo"} khoản vay?\n\n` +
 
                 `Đối tác: ${loan.counterparty}\n` +
 
-                `Số tiền: ${loan.principalMinor.toLocaleString("vi-VN")
+                `Tiền gốc: ${loan.principalMinor.toLocaleString("vi-VN")
                 } ${loan.currency}\n\n` +
 
-                "Số dư tài khoản sẽ thay đổi."
+                "Số dư và dư nợ có thể thay đổi."
             );
 
             if (!confirmed) return;
@@ -300,20 +1114,30 @@ async function start() {
             saveButton.disabled = true;
             currencySelect.disabled = true;
 
-            await saveLoan(db, loan, today());
+            if (original) {
+                await mutateDebt(
+                    db,
+                    original,
+                    {
+                        kind: "updateLoan",
+                        next: loan,
+                    },
+                    today()
+                );
+            } else {
+                await saveLoan(db, loan, today());
+            }
 
-            form.reset();
-
-            startInput.value = today();
-            rateInput.value = "0";
+            clearLoanEdit();
 
             currencySelect.value = loan.currency;
 
             try {
                 await refresh();
 
-                status.textContent =
-                    "Đã tạo khoản vay thành công.";
+                status.textContent = original
+                    ? "Đã cập nhật khoản vay."
+                    : "Đã tạo khoản vay thành công.";
 
             } catch {
                 status.textContent =

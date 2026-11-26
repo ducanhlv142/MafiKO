@@ -9,6 +9,15 @@ import {
     getReportTransactions,
     getLoanNetValue,
 } from "../domain/finance/ledger.js";
+import {
+    summarizeLoan,
+    paymentTotal,
+} from "../domain/finance/debt.js";
+
+import {
+    estimateLoanInterest,
+    getLoanMaturity,
+} from "../domain/finance/loan-interest.js";
 
 const ExcelJS = (
     globalThis as typeof globalThis & {
@@ -468,6 +477,230 @@ export async function createExcelWorkbook(
 
     budgetsSheet.autoFilter = "A1:I1";
 
+    const reportDate = new Date(backup.exportedAt);
+
+    const reportDay =
+        `${reportDate.getFullYear()}-` +
+        `${String(reportDate.getMonth() + 1).padStart(2, "0")}-` +
+        `${String(reportDate.getDate()).padStart(2, "0")}`;
+
+    const loansSheet = workbook.addWorksheet("Loans");
+
+    loansSheet.columns = [
+        { header: "ID", key: "id", width: 40 },
+        { header: "Loại", key: "direction", width: 18 },
+        { header: "Đối tác", key: "counterparty", width: 28 },
+        { header: "ID tài khoản", key: "accountId", width: 40 },
+        { header: "Tài khoản", key: "account", width: 25 },
+        { header: "Tiền tệ", key: "currency", width: 12 },
+        { header: "Ngày bắt đầu", key: "startDate", width: 18 },
+        { header: "Ngày đáo hạn", key: "dueDate", width: 18 },
+        { header: "Tiền gốc", key: "principal", width: 20 },
+        { header: "Gốc đã thanh toán", key: "principalPaid", width: 22 },
+        { header: "Gốc còn lại", key: "remaining", width: 22 },
+        { header: "Lãi suất năm", key: "rate", width: 18 },
+        { header: "Tiến độ trả gốc", key: "progress", width: 22 },
+        { header: "Lãi đã thanh toán", key: "interestPaid", width: 24 },
+        { header: "Phí đã thanh toán", key: "feePaid", width: 24 },
+        { header: "Tổng thanh toán", key: "totalPaid", width: 22 },
+        { header: "Ngày ước tính", key: "asOf", width: 18 },
+        { header: "Lãi ước tính", key: "estimatedInterest", width: 22 },
+        { header: "Lãi còn lại ước tính", key: "unpaidInterest", width: 26 },
+        { header: "Trạng thái", key: "status", width: 30 },
+        { header: "Ghi chú", key: "note", width: 40 },
+    ];
+
+    const maturityColors = {
+        notStarted: "FF64748B",
+        settled: "FF15803D",
+        noDueDate: "FF64748B",
+        active: "FF15803D",
+        dueSoon: "FFB45309",
+        dueToday: "FFDC2626",
+        overdue: "FFDC2626",
+    };
+
+    const sortedLoans = [...backup.loans].sort(
+        (a, b) =>
+            a.currency.localeCompare(b.currency) ||
+            a.direction.localeCompare(b.direction) ||
+            b.startDate.localeCompare(a.startDate)
+    );
+
+    for (const loan of sortedLoans) {
+        const account = accountMap.get(loan.accountId);
+
+        if (!account) {
+            throw new Error(
+                `Khoản vay ${loan.id} thiếu tài khoản.`
+            );
+        }
+
+        const summary = summarizeLoan(
+            loan,
+            backup.loanPayments
+        );
+
+        const interest = estimateLoanInterest(
+            loan,
+            backup.loanPayments,
+            reportDay
+        );
+
+        const maturity = getLoanMaturity(
+            loan,
+            backup.loanPayments,
+            reportDay
+        );
+
+        const row = loansSheet.addRow({
+            id: loan.id,
+
+            direction:
+                loan.direction === "borrowed"
+                    ? "Vay"
+                    : "Cho vay",
+
+            counterparty: loan.counterparty,
+
+            accountId: loan.accountId,
+            account: account.name,
+            currency: loan.currency,
+
+            startDate: loan.startDate,
+            dueDate: loan.dueDate ?? "",
+
+            principal: loan.principalMinor,
+            principalPaid: summary.principalPaidMinor,
+            remaining: summary.remainingPrincipalMinor,
+
+            rate: loan.annualRateBps / 10000,
+
+            progress:
+                summary.principalPaidMinor /
+                loan.principalMinor,
+
+            interestPaid: summary.interestPaidMinor,
+            feePaid: summary.feePaidMinor,
+            totalPaid: summary.totalPaidMinor,
+
+            asOf: reportDay,
+
+            estimatedInterest:
+                interest.estimatedInterestMinor,
+
+            unpaidInterest:
+                interest.estimatedUnpaidInterestMinor,
+
+            status: maturity.label,
+
+            note: loan.note,
+        });
+
+        row.getCell("status").font = {
+            bold: true,
+            color: {
+                argb: maturityColors[maturity.status],
+            },
+        };
+
+        row.getCell("direction").font = {
+            bold: true,
+            color: {
+                argb: loan.direction === "borrowed"
+                    ? "FFDC2626"
+                    : "FF15803D",
+            },
+        };
+    }
+
+    loansSheet.getColumn("rate").numFmt = "0.00%";
+
+    loansSheet.getColumn("progress").numFmt = "0.0%";
+
+    loansSheet.autoFilter = "A1:U1";
+
+    const paymentsSheet =
+        workbook.addWorksheet("Loan Payments");
+
+    paymentsSheet.columns = [
+        { header: "ID", key: "id", width: 40 },
+        { header: "Loan ID", key: "loanId", width: 40 },
+        { header: "Loại", key: "direction", width: 20 },
+        { header: "Đối tác", key: "counterparty", width: 28 },
+        { header: "ID tài khoản", key: "accountId", width: 40 },
+        { header: "Tài khoản", key: "account", width: 25 },
+        { header: "Tiền tệ", key: "currency", width: 12 },
+        { header: "Ngày thanh toán", key: "date", width: 18 },
+        { header: "Tiền gốc", key: "principal", width: 20 },
+        { header: "Tiền lãi", key: "interest", width: 20 },
+        { header: "Tiền phí", key: "fee", width: 20 },
+        { header: "Tổng thanh toán", key: "totalPaid", width: 24 },
+        { header: "Ghi chú", key: "note", width: 40 },
+    ];
+
+    const debtLoanMap = new Map(
+        backup.loans.map(loan => [loan.id, loan])
+    );
+
+    const sortedPayments =
+        [...backup.loanPayments].sort(
+            (a, b) =>
+                b.date.localeCompare(a.date) ||
+                a.loanId.localeCompare(b.loanId) ||
+                a.id.localeCompare(b.id)
+        );
+
+    for (const payment of sortedPayments) {
+        const loan = debtLoanMap.get(payment.loanId);
+
+        const account = accountMap.get(payment.accountId);
+
+        if (!loan || !account) {
+            throw new Error(
+                `Thanh toán ${payment.id} thiếu dữ liệu liên kết.`
+            );
+        }
+
+        const row = paymentsSheet.addRow({
+            id: payment.id,
+
+            loanId: payment.loanId,
+
+            direction:
+                loan.direction === "borrowed"
+                    ? "Trả nợ"
+                    : "Thu hồi nợ",
+
+            counterparty: loan.counterparty,
+
+            accountId: payment.accountId,
+            account: account.name,
+            currency: loan.currency,
+
+            date: payment.date,
+
+            principal: payment.principalMinor,
+            interest: payment.interestMinor,
+            fee: payment.feeMinor,
+
+            totalPaid: paymentTotal(payment),
+
+            note: payment.note,
+        });
+
+        row.getCell("direction").font = {
+            bold: true,
+            color: {
+                argb: loan.direction === "borrowed"
+                    ? "FFDC2626"
+                    : "FF15803D",
+            },
+        };
+    }
+
+    paymentsSheet.autoFilter = "A1:M1";
+
     const moneyFormat = "#,##0;[Red]-#,##0;0";
 
     for (const ws of workbook.worksheets) {
@@ -539,6 +772,15 @@ export async function createExcelWorkbook(
                 "limit",
                 "spent",
                 "remaining",
+                "principal",
+                "principalPaid",
+                "interest",
+                "interestPaid",
+                "fee",
+                "feePaid",
+                "totalPaid",
+                "estimatedInterest",
+                "unpaidInterest",
             ].includes(column.key ?? "")) {
                 column.numFmt = moneyFormat;
             }
@@ -567,6 +809,14 @@ export async function createExcelWorkbook(
 
     budgetsSheet.properties.tabColor = {
         argb: "FFDB2777",
+    };
+
+    loansSheet.properties.tabColor = {
+        argb: "FFDC2626",
+    };
+
+    paymentsSheet.properties.tabColor = {
+        argb: "FF0D9488",
     };
 
     const buffer = await workbook.xlsx.writeBuffer();

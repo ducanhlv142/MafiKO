@@ -76,6 +76,10 @@
             Lưu khoản vay
         </button>
 
+        <button id="loan-edit-cancel" type="button" hidden>
+            Hủy chỉnh sửa
+        </button>
+
     </form>
 
     <hr>
@@ -91,6 +95,23 @@
 
     <p id="loan-totals"></p>
 
+    <h3>Cảnh báo khoản vay</h3>
+
+    <ul id="loan-alerts"></ul>
+
+    <p>
+        <label>Ước tính lãi đến ngày
+            <input id="loan-interest-date" type="date" required>
+        </label>
+    </p>
+
+    <p>
+        <small>
+            Lãi ước tính theo dư nợ giảm dần,
+            không phải số tiền phải trả chính thức.
+        </small>
+    </p>
+
     <h2>Danh sách khoản vay</h2>
 
     <table border="1" cellpadding="8">
@@ -105,7 +126,12 @@
                 <th>Lãi suất năm</th>
                 <th>Ngày bắt đầu</th>
                 <th>Đáo hạn</th>
+                <th>Tiến độ trả gốc</th>
+                <th>Lãi ước tính</th>
+                <th>Lãi đã thanh toán</th>
+                <th>Lãi còn lại ước tính</th>
                 <th>Trạng thái</th>
+                <th>Thao tác</th>
             </tr>
         </thead>
 
@@ -113,6 +139,72 @@
     </table>
 
     <p id="loan-status" role="status"></p>
+
+    <dialog id="payment-dialog">
+
+        <h2 id="payment-title">Thanh toán khoản vay</h2>
+
+        <p id="payment-summary"></p>
+
+        <form id="payment-form">
+
+            <p>
+                <label>Tài khoản thanh toán
+                    <select id="payment-account" required></select>
+                </label>
+            </p>
+
+            <p>
+                <label>Tiền gốc
+                    <input id="payment-principal" type="number" min="0" step="1" value="0" required>
+                </label>
+            </p>
+
+            <p>
+                <label>Tiền lãi
+                    <input id="payment-interest" type="number" min="0" step="1" value="0" required>
+                </label>
+            </p>
+
+            <p>
+                <label>Tiền phí
+                    <input id="payment-fee" type="number" min="0" step="1" value="0" required>
+                </label>
+            </p>
+
+            <p>
+                <label>Ngày thanh toán
+                    <input id="payment-date" type="date" required>
+                </label>
+            </p>
+
+            <p>
+                <label>Ghi chú
+                    <input id="payment-note" maxlength="200">
+                </label>
+            </p>
+
+            <p id="payment-total"></p>
+
+            <p id="payment-status" role="status"></p>
+
+            <button id="payment-save" type="submit">
+                Xác nhận thanh toán
+            </button>
+
+            <button id="payment-cancel" type="button">
+                Đóng
+            </button>
+
+        </form>
+
+        <hr>
+
+        <h3>Lịch sử thanh toán</h3>
+
+        <ul id="payment-history"></ul>
+
+    </dialog>
 
     <script type="module" src="./dist-web/storage/loan-browser.js">
     </script>
