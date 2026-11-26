@@ -1,4 +1,8 @@
 import type { Transaction } from "./transaction";
+import {
+    safeAddMinor,
+    safeSubtractMinor,
+} from "./money.js";
 
 export function summarizeMonth(
     transactions: readonly Transaction[],
@@ -15,15 +19,37 @@ export function summarizeMonth(
         }
 
         if (entry.kind === "income") {
-            income += entry.amountMinor;
+            income = safeAddMinor(
+                income,
+                entry.amountMinor
+            );
             continue;
         }
 
-        expense += entry.amountMinor;
+        expense = safeAddMinor(
+            expense,
+            entry.amountMinor
+        );
         const categoryId = entry.categoryId ?? "uncategorized";
         const previous = expenseByCategory.get(categoryId) ?? 0;
-        expenseByCategory.set(categoryId, previous + entry.amountMinor);
+        expenseByCategory.set(
+            categoryId,
+            safeAddMinor(
+                previous,
+                entry.amountMinor
+            )
+        );
     }
 
-    return { income, expense, net: income - expense, expenseByCategory };
+    return {
+        income,
+        expense,
+
+        net: safeSubtractMinor(
+            income,
+            expense
+        ),
+
+        expenseByCategory,
+    };
 }

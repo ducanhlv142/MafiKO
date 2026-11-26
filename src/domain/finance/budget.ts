@@ -3,6 +3,10 @@ import type { Transaction } from "./transaction";
 import type { ExpenseCategoryId } from "./category";
 import { isValidCurrency } from "./currency.js";
 import { categories } from "./category.js";
+import {
+    safeAddMinor,
+    safeSubtractMinor,
+} from "./money.js";
 
 export interface Budget {
     id: string;
@@ -104,15 +108,16 @@ export function summarizeBudget(
             continue;
         }
 
-        spentMinor += t.amountMinor;
-
-        if (!Number.isSafeInteger(spentMinor)) {
-            throw new Error("Tổng chi vượt giới hạn số nguyên.");
-        }
+        spentMinor = safeAddMinor(
+            spentMinor,
+            t.amountMinor
+        );
     }
 
-    const remainingMinor =
-        budget.limitMinor - spentMinor;
+    const remainingMinor = safeSubtractMinor(
+        budget.limitMinor,
+        spentMinor
+    );
 
     const usagePercent =
         spentMinor / budget.limitMinor * 100;
@@ -123,7 +128,10 @@ export function summarizeBudget(
         status = "exceeded";
     } else if (spentMinor === budget.limitMinor) {
         status = "reached";
-    } else if (usagePercent >= 80) {
+    } else if (
+        BigInt(spentMinor) * 100n >=
+        BigInt(budget.limitMinor) * 80n
+    ) {
         status = "warning";
     }
 

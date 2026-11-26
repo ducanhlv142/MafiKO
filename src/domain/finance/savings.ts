@@ -1,5 +1,8 @@
 import type { Account } from "./account";
 import { isValidCurrency } from "./currency.js";
+import {
+    safeAddMinor as safeAdd,
+} from "./money.js";
 
 export type SavingsKind =
     | "flexible"
@@ -93,18 +96,6 @@ function validMoney(value: unknown): value is number {
         Number.isSafeInteger(value) &&
         value >= 0
     );
-}
-
-function safeAdd(a: number, b: number): number {
-    const result = a + b;
-
-    if (!Number.isSafeInteger(result)) {
-        throw new Error(
-            "Số tiền vượt giới hạn an toàn."
-        );
-    }
-
-    return result;
 }
 
 export function isValidSavingsPlan(
