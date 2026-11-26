@@ -1,5 +1,5 @@
 const DATABASE_NAME = "mafiko";
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 
 export function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -15,6 +15,12 @@ export function openDatabase(): Promise<IDBDatabase> {
       if (event.oldVersion < 2) {
         const store = db.createObjectStore("transactions", { keyPath: "id" });
         store.createIndex("byAccount", "accountId");
+      }
+
+      if (event.oldVersion < 3) {
+        const store = db.createObjectStore("transfers", { keyPath: "id" });
+        store.createIndex("bySource", "fromAccountId");
+        store.createIndex("byDestination", "toAccountId");
       }
     };
 

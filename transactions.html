@@ -1,34 +1,53 @@
 <!doctype html>
 <html lang="vi">
+
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MafiKO · Thu chi</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MafiKO · Thu chi</title>
 </head>
+
 <body>
-  <a href="./account-demo.html">← Tài khoản</a>
-  <h1>Sổ thu chi</h1>
+    <a href="./account-demo.html">← Tài khoản</a>
+    <h1>Sổ thu chi</h1>
 
-  <label>Tài khoản <select id="account"></select></label>
-  <p><strong id="balance"></strong></p>
+    <label>Tài khoản <select id="account"></select></label>
+    <p><strong id="balance"></strong></p>
 
-  <form id="entry">
-    <p><label>Loại
-      <select name="kind">
-        <option value="expense">Chi</option>
-        <option value="income">Thu</option>
-      </select>
-    </label></p>
-    <p><label>Số tiền <input name="amount" type="number" min="1" step="1" required></label></p>
-    <p><label>Ngày <input id="date" name="date" type="date" required></label></p>
-    <p><label>Nội dung <input name="note" maxlength="120" placeholder="Tiền cơm trưa" required></label></p>
-    <button id="save" disabled>Lưu giao dịch</button>
-  </form>
+    <form id="entry">
+        <p><label>Loại
+                <select name="kind">
+                    <option value="expense">Chi</option>
+                    <option value="income">Thu</option>
+                </select>
+            </label></p>
+        <p><label>Số tiền <input name="amount" type="number" min="1" step="1" required></label></p>
+        <p><label>Ngày <input id="date" name="date" type="date" required></label></p>
+        <p><label>Nội dung <input name="note" maxlength="120" placeholder="Tiền cơm trưa" required></label></p>
+        <button id="save" disabled>Lưu giao dịch</button>
+    </form>
+    <h2>Chuyển từ tài khoản đang chọn</h2>
 
-  <p id="status" role="status"></p>
-  <h2>Lịch sử của tài khoản</h2>
-  <ul id="history"></ul>
+    <form id="transfer-form">
+        <p><label>Đến tài khoản
+                <select id="transfer-to" required></select>
+            </label></p>
+        <p><label>Số tiền
+                <input name="amount" type="number" min="1" step="1" required>
+            </label></p>
+        <p><label>Ngày chuyển
+                <input id="transfer-date" name="date" type="date" required>
+            </label></p>
+        <p><label>Nội dung
+                <input name="note" maxlength="120" placeholder="Ví dụ: Rút ATM">
+            </label></p>
+        <button id="transfer-save" disabled>Chuyển tiền</button>
+    </form>
+    <p id="status" role="status"></p>
+    <h2>Lịch sử của tài khoản</h2>
+    <ul id="history"></ul>
 
-  <script type="module" src="./dist-web/storage/transaction-browser.js"></script>
+    <script type="module" src="./dist-web/storage/transaction-browser.js"></script>
 </body>
+
 </html>
