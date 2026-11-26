@@ -8,6 +8,10 @@ import type { Transfer } from "../domain/finance/transfer";
 import { categories } from "../domain/finance/category.js";
 import { summarizeMonth } from "../domain/finance/monthly-summary.js";
 import { changeCategory } from "./change-category.js";
+import { deleteTransaction } from "./delete-transaction.js";
+import { deleteTransfer } from "./delete-transfer.js";
+import { updateTransaction } from "./update-transaction.js";
+import { updateTransfer } from "./update-transfer.js";
 
 const accountSelect = document.querySelector<HTMLSelectElement>("#account")!;
 const form = document.querySelector<HTMLFormElement>("#entry")!;
@@ -191,6 +195,280 @@ async function start() {
         void refresh().catch(reportReadError);
     };
 
+    const editDialog =
+        document.querySelector<HTMLDialogElement>("#edit-dialog")!;
+
+    const editForm =
+        document.querySelector<HTMLFormElement>("#edit-form")!;
+
+    const editKind =
+        document.querySelector<HTMLSelectElement>("#edit-kind")!;
+
+    const editCategory =
+        document.querySelector<HTMLSelectElement>("#edit-category")!;
+
+    const editDate =
+        document.querySelector<HTMLInputElement>("#edit-date")!;
+
+    const editStatus =
+        document.querySelector<HTMLElement>("#edit-status")!;
+
+    const editSave =
+        document.querySelector<HTMLButtonElement>("#edit-save")!;
+
+    const editCancel =
+        document.querySelector<HTMLButtonElement>("#edit-cancel")!;
+
+    let editingEntry: Transaction | null = null;
+    let savingEdit = false;
+
+    function updateEditCategories() {
+        const kind = editKind.value === "income"
+            ? "income"
+            : "expense";
+
+        editCategory.replaceChildren();
+
+        editCategory.add(
+            new Option("Chưa phân loại", "")
+        );
+
+        for (const [id, label] of Object.entries(categories[kind])) {
+            editCategory.add(new Option(label, id));
+        }
+    }
+
+    editKind.onchange = updateEditCategories;
+
+    function openEdit(entry: Transaction) {
+        editingEntry = entry;
+
+        const account = accounts.find(
+            a => a.id === entry.accountId
+        )!;
+
+        editKind.value = entry.kind;
+
+        updateEditCategories();
+
+        editCategory.value = entry.categoryId ?? "";
+
+        editForm.querySelector<HTMLInputElement>(
+            '[name="amount"]'
+        )!.value = String(entry.amountMinor);
+
+        editForm.querySelector<HTMLInputElement>(
+            '[name="note"]'
+        )!.value = entry.note;
+
+        editDate.min = account.openingBalanceDate;
+        editDate.max = today();
+        editDate.value = entry.date;
+
+        editStatus.textContent = "";
+
+        editDialog.showModal();
+    }
+
+    editCancel.onclick = () => {
+        if (!savingEdit) editDialog.close();
+    };
+
+    editDialog.oncancel = (event) => {
+        if (savingEdit) event.preventDefault();
+    };
+
+    editForm.onsubmit = async (event) => {
+        event.preventDefault();
+
+        if (!editingEntry || savingEdit) return;
+
+        const data = new FormData(editForm);
+
+        const kind = editKind.value === "income"
+            ? "income"
+            : "expense";
+
+        const categoryId = (
+            editCategory.value || undefined
+        ) as Transaction["categoryId"];
+
+        savingEdit = true;
+        editSave.disabled = true;
+        editCancel.disabled = true;
+        editStatus.textContent = "Đang lưu...";
+
+        try {
+            await updateTransaction(
+                db,
+                editingEntry,
+                {
+                    kind,
+                    categoryId,
+                    amountMinor: Number(data.get("amount")),
+                    date: editDate.value,
+                    note: String(data.get("note") ?? "").trim(),
+                },
+                today()
+            );
+
+            editingEntry = null;
+            editDialog.close();
+
+            status.textContent = "Đã cập nhật giao dịch.";
+
+            await refresh().catch(reportReadError);
+
+        } catch (error) {
+            editStatus.textContent =
+                error instanceof Error
+                    ? error.message
+                    : "Không cập nhật được giao dịch.";
+
+        } finally {
+            savingEdit = false;
+            editSave.disabled = false;
+            editCancel.disabled = false;
+        }
+    };
+
+    const editTransferDialog =
+        document.querySelector<HTMLDialogElement>(
+            "#edit-transfer-dialog"
+        )!;
+
+    const editTransferForm =
+        document.querySelector<HTMLFormElement>(
+            "#edit-transfer-form"
+        )!;
+
+    const editTransferRoute =
+        document.querySelector<HTMLElement>(
+            "#edit-transfer-route"
+        )!;
+
+    const editTransferDate =
+        document.querySelector<HTMLInputElement>(
+            "#edit-transfer-date"
+        )!;
+
+    const editTransferStatus =
+        document.querySelector<HTMLElement>(
+            "#edit-transfer-status"
+        )!;
+
+    const editTransferSave =
+        document.querySelector<HTMLButtonElement>(
+            "#edit-transfer-save"
+        )!;
+
+    const editTransferCancel =
+        document.querySelector<HTMLButtonElement>(
+            "#edit-transfer-cancel"
+        )!;
+
+    let editingTransfer: Transfer | null = null;
+    let savingTransferEdit = false;
+
+    function openTransferEdit(transfer: Transfer) {
+        const from = accounts.find(
+            a => a.id === transfer.fromAccountId
+        );
+
+        const to = accounts.find(
+            a => a.id === transfer.toAccountId
+        );
+
+        if (!from || !to) {
+            status.textContent = "Không tìm thấy tài khoản.";
+            return;
+        }
+
+        editingTransfer = transfer;
+
+        editTransferRoute.textContent =
+            `${from.name} → ${to.name} · ${transfer.currency}`;
+
+        editTransferForm.querySelector<HTMLInputElement>(
+            '[name="amount"]'
+        )!.value = String(transfer.amountMinor);
+
+        editTransferForm.querySelector<HTMLInputElement>(
+            '[name="note"]'
+        )!.value = transfer.note;
+
+        editTransferDate.min =
+            from.openingBalanceDate > to.openingBalanceDate
+                ? from.openingBalanceDate
+                : to.openingBalanceDate;
+
+        editTransferDate.max = today();
+        editTransferDate.value = transfer.date;
+
+        editTransferStatus.textContent = "";
+
+        editTransferDialog.showModal();
+    }
+
+    editTransferCancel.onclick = () => {
+        if (!savingTransferEdit) {
+            editTransferDialog.close();
+        }
+    };
+
+    editTransferDialog.oncancel = (event) => {
+        if (savingTransferEdit) {
+            event.preventDefault();
+        }
+    };
+
+    editTransferForm.onsubmit = async (event) => {
+        event.preventDefault();
+
+        if (!editingTransfer || savingTransferEdit) return;
+
+        const data = new FormData(editTransferForm);
+
+        savingTransferEdit = true;
+        editTransferSave.disabled = true;
+        editTransferCancel.disabled = true;
+
+        editTransferStatus.textContent = "Đang lưu...";
+
+        try {
+            await updateTransfer(
+                db,
+                editingTransfer,
+                {
+                    amountMinor: Number(data.get("amount")),
+                    date: editTransferDate.value,
+                    note: String(data.get("note") ?? "").trim(),
+                },
+                today()
+            );
+
+            editingTransfer = null;
+
+            editTransferDialog.close();
+
+            status.textContent =
+                "Đã cập nhật khoản chuyển tiền.";
+
+            await refresh().catch(reportReadError);
+
+        } catch (error) {
+            editTransferStatus.textContent =
+                error instanceof Error
+                    ? error.message
+                    : "Không cập nhật được khoản chuyển.";
+
+        } finally {
+            savingTransferEdit = false;
+            editTransferSave.disabled = false;
+            editTransferCancel.disabled = false;
+        }
+    };
+
     async function refresh() {
         const account = selectedAccount();
         dateInput.min = account.openingBalanceDate;
@@ -227,7 +505,12 @@ async function start() {
         balance.textContent = `${isCard ? "Dư nợ" : "Số dư"}: ${money(current)}`;
         historyList.replaceChildren();
 
-        const rows: { date: string; text: string; entry?: Transaction }[] = entries.map((entry) => {
+        const rows: {
+            date: string;
+            text: string;
+            entry?: Transaction;
+            transfer?: Transfer;
+        }[] = entries.map((entry) => {
             const label = entry.kind === "expense" ? "Chi" : "Thu";
             const labels: Readonly<Record<string, string>> = categories[entry.kind];
             const category = labels[entry.categoryId ?? ""] ?? "Chưa phân loại";
@@ -247,6 +530,7 @@ async function start() {
             const note = transfer.note ? ` · ${transfer.note}` : "";
 
             rows.push({
+                transfer,
                 date: transfer.date,
                 text: `${direction} · ${money(transfer.amountMinor)}${note}`,
             });
@@ -291,6 +575,122 @@ async function start() {
                 };
 
                 li.append(" ", select);
+
+                const editButton = document.createElement("button");
+
+                editButton.type = "button";
+                editButton.textContent = "Sửa";
+                editButton.style.color = "#2563eb";
+                editButton.style.marginLeft = "8px";
+
+                editButton.onclick = () => {
+                    openEdit(entry);
+                };
+
+                li.append(editButton);
+
+                const deleteButton = document.createElement("button");
+
+                deleteButton.type = "button";
+                deleteButton.textContent = "Xóa";
+                deleteButton.style.color = "#dc2626";
+                deleteButton.style.marginLeft = "8px";
+
+                deleteButton.onclick = async () => {
+                    const confirmed = window.confirm(
+                        `Xóa giao dịch "${entry.note}"?\n` +
+                        `Số tiền: ${money(entry.amountMinor)}\n\n` +
+                        "Hành động này không thể hoàn tác."
+                    );
+
+                    if (!confirmed) return;
+
+                    deleteButton.disabled = true;
+                    select.disabled = true;
+
+                    try {
+                        await deleteTransaction(db, entry);
+
+                        status.textContent = "Đã xóa giao dịch.";
+
+                        await refresh().catch(reportReadError);
+
+                    } catch (error) {
+                        status.textContent =
+                            error instanceof Error
+                                ? error.message
+                                : "Xóa giao dịch thất bại.";
+
+                        deleteButton.disabled = false;
+                        select.disabled = false;
+                    }
+                };
+
+                li.append(deleteButton);
+            }
+            if (row.transfer) {
+                const transfer = row.transfer;
+
+                const editButton = document.createElement("button");
+
+                editButton.type = "button";
+                editButton.textContent = "Sửa";
+                editButton.style.color = "#2563eb";
+                editButton.style.marginLeft = "8px";
+
+                editButton.onclick = () => {
+                    openTransferEdit(transfer);
+                };
+
+                li.append(editButton);
+
+                const fromName = accounts.find(
+                    a => a.id === transfer.fromAccountId
+                )?.name ?? transfer.fromAccountId;
+
+                const toName = accounts.find(
+                    a => a.id === transfer.toAccountId
+                )?.name ?? transfer.toAccountId;
+
+                const deleteButton = document.createElement("button");
+
+                deleteButton.type = "button";
+                deleteButton.textContent = "Xóa";
+                deleteButton.style.color = "#dc2626";
+                deleteButton.style.marginLeft = "8px";
+
+                deleteButton.onclick = async () => {
+                    const confirmed = window.confirm(
+                        `Xóa khoản chuyển tiền?\n\n` +
+                        `Nguồn: ${fromName}\n` +
+                        `Đích: ${toName}\n` +
+                        `Số tiền: ${money(transfer.amountMinor)}\n\n` +
+                        "Số dư cả hai tài khoản sẽ thay đổi.\n" +
+                        "Hành động này không thể hoàn tác."
+                    );
+
+                    if (!confirmed) return;
+
+                    deleteButton.disabled = true;
+
+                    try {
+                        await deleteTransfer(db, transfer);
+
+                        status.textContent = "Đã xóa khoản chuyển tiền.";
+
+                        await refresh().catch(reportReadError);
+
+                    } catch (error) {
+                        status.textContent =
+                            error instanceof Error
+                                ? error.message
+                                : "Xóa khoản chuyển tiền thất bại.";
+
+                        deleteButton.disabled = false;
+                    }
+                };
+
+                li.append(deleteButton);
             }
             historyList.append(li);
         }

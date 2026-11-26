@@ -67,7 +67,93 @@
     </section>
     <h2>Lịch sử của tài khoản</h2>
     <ul id="history"></ul>
+    <dialog id="edit-dialog">
+        <h2>Chỉnh sửa giao dịch</h2>
 
+        <form id="edit-form">
+
+            <p>
+                <label>Loại giao dịch
+                    <select id="edit-kind" name="kind">
+                        <option value="expense">Chi</option>
+                        <option value="income">Thu</option>
+                    </select>
+                </label>
+            </p>
+
+            <p>
+                <label>Danh mục
+                    <select id="edit-category" name="categoryId"></select>
+                </label>
+            </p>
+
+            <p>
+                <label>Số tiền
+                    <input name="amount" type="number" min="1" step="1" required>
+                </label>
+            </p>
+
+            <p>
+                <label>Ngày
+                    <input id="edit-date" name="date" type="date" required>
+                </label>
+            </p>
+
+            <p>
+                <label>Nội dung
+                    <input name="note">
+                </label>
+            </p>
+
+            <p id="edit-status" role="status"></p>
+
+            <button id="edit-save" type="submit">
+                Lưu thay đổi
+            </button>
+
+            <button id="edit-cancel" type="button">
+                Hủy
+            </button>
+
+        </form>
+    </dialog>
+    <dialog id="edit-transfer-dialog">
+        <h2>Chỉnh sửa khoản chuyển tiền</h2>
+
+        <p id="edit-transfer-route"></p>
+
+        <form id="edit-transfer-form">
+
+            <p>
+                <label>Số tiền
+                    <input name="amount" type="number" min="1" step="1" required>
+                </label>
+            </p>
+
+            <p>
+                <label>Ngày chuyển
+                    <input id="edit-transfer-date" name="date" type="date" required>
+                </label>
+            </p>
+
+            <p>
+                <label>Nội dung
+                    <input name="note">
+                </label>
+            </p>
+
+            <p id="edit-transfer-status" role="status"></p>
+
+            <button id="edit-transfer-save" type="submit">
+                Lưu thay đổi
+            </button>
+
+            <button id="edit-transfer-cancel" type="button">
+                Hủy
+            </button>
+
+        </form>
+    </dialog>
     <script type="module" src="./dist-web/storage/transaction-browser.js"></script>
 </body>
 
