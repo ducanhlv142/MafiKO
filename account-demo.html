@@ -54,6 +54,37 @@
   <button id="export-backup" type="button" disabled>Tải bản sao lưu JSON</button>
   <button id="export-csv" type="button" disabled>Xuất CSV</button>
   <p id="csv-status" role="status"></p>
+  <button id="export-excel" type="button" disabled>Xuất Excel</button>
+  <p id="excel-status" role="status"></p>
+  <hr>
+
+  <h2>Nhập giao dịch từ Excel</h2>
+
+  <input id="excel-file" type="file" accept=".xlsx">
+
+  <p id="excel-import-status" role="status"></p>
+
+  <table id="excel-preview" border="1" cellpadding="6" hidden>
+    <thead>
+      <tr>
+        <th>Vị trí</th>
+        <th>Ngày</th>
+        <th>Loại</th>
+        <th>Số tiền</th>
+        <th>Nội dung</th>
+        <th>Trạng thái</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <p>
+    <button id="import-excel" type="button" disabled>
+      Xác nhận nhập Excel
+    </button>
+  </p>
+
+  <hr>
   <hr>
 
   <h2>Nhập giao dịch từ CSV</h2>
@@ -94,7 +125,7 @@
   </p>
   <p id="restore-preview" role="status"></p>
   <button id="restore-backup" type="button" disabled>Khôi phục và thay thế sổ</button>
-
+  <script src="./node_modules/exceljs/dist/exceljs.min.js"></script>
   <script type="module" src="./dist-web/storage/account-browser.js"></script>
 </body>
 

@@ -20,5 +20,8 @@
   "homepage": "https://github.com/ducanhlv142/MafiKO#readme",
   "devDependencies": {
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0"
   }
 }

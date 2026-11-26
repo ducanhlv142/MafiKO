@@ -8,6 +8,10 @@ import { prepareCsvImport } from "./import-csv.js";
 import { detectDuplicates } from "./detect-duplicates.js";
 import { commitCsvImport } from "./commit-csv.js";
 import type { ImportRow } from "./import-csv";
+import { createExcelWorkbook } from "./export-excel.js";
+import { prepareExcelImport } from "./import-excel.js";
+import { commitExcelImport } from "./commit-excel.js";
+import type { ExcelImportRow } from "./import-excel";
 
 const form = document.querySelector<HTMLFormElement>("#account-form")!;
 const dateInput = document.querySelector<HTMLInputElement>("#opening-date")!;
@@ -120,6 +124,215 @@ async function start() {
           : "Xuất CSV thất bại.";
     } finally {
       csvButton.disabled = false;
+    }
+  };
+
+  const excelButton =
+    document.querySelector<HTMLButtonElement>("#export-excel")!;
+
+  const excelStatus =
+    document.querySelector<HTMLElement>("#excel-status")!;
+
+  excelButton.disabled = false;
+
+  excelButton.onclick = async () => {
+    excelButton.disabled = true;
+    excelStatus.textContent = "Đang tạo Excel...";
+
+    try {
+      const backup = await createBackup(db);
+      const blob = await createExcelWorkbook(backup);
+
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+
+      link.download =
+        `mafiko-${backup.exportedAt.replace(/[:.]/g, "-")}.xlsx`;
+
+      link.click();
+
+      window.setTimeout(
+        () => URL.revokeObjectURL(url),
+        1000
+      );
+
+      excelStatus.textContent = "Đã xuất file Excel.";
+
+    } catch (error) {
+      excelStatus.textContent =
+        error instanceof Error
+          ? error.message
+          : "Xuất Excel thất bại.";
+
+    } finally {
+      excelButton.disabled = false;
+    }
+  };
+
+  const excelFile =
+    document.querySelector<HTMLInputElement>("#excel-file")!;
+
+  const excelImportStatus =
+    document.querySelector<HTMLElement>("#excel-import-status")!;
+
+  const excelPreview =
+    document.querySelector<HTMLTableElement>("#excel-preview")!;
+
+  const excelPreviewBody = excelPreview.tBodies[0];
+
+  const importExcelButton =
+    document.querySelector<HTMLButtonElement>("#import-excel")!;
+
+  let excelReadVersion = 0;
+  let pendingExcel: {
+    backup: FinanceBackup;
+    rows: ExcelImportRow[];
+  } | null = null;
+
+  excelFile.onchange = async () => {
+    const version = ++excelReadVersion;
+    pendingExcel = null;
+    const file = excelFile.files?.[0];
+
+    excelPreview.hidden = true;
+    excelPreviewBody.replaceChildren();
+    importExcelButton.disabled = true;
+    excelImportStatus.textContent = "";
+
+    if (!file) return;
+
+    try {
+      excelImportStatus.textContent =
+        "Đang kiểm tra file Excel...";
+
+      const buffer = await file.arrayBuffer();
+      const backup = await createBackup(db);
+
+      const result = await prepareExcelImport(
+        buffer,
+        backup
+      );
+
+      if (version !== excelReadVersion) return;
+
+      const accounts = new Map(
+        backup.accounts.map(a => [a.id, a])
+      );
+
+      for (const row of result.rows) {
+        const tr = excelPreviewBody.insertRow();
+
+        const t = row.data;
+
+        const kind = row.type === "transfer"
+          ? "Chuyển tiền"
+          : row.data.kind === "income" ? "Thu" : "Chi";
+
+        const currency = row.type === "transfer"
+          ? row.data.currency
+          : accounts.get(row.data.accountId)!.currency;
+
+        const conflict =
+          result.conflicts.get(row.rowNumber);
+
+        const duplicate =
+          result.duplicates.get(row.rowNumber);
+
+        const statusText =
+          conflict ?? duplicate ?? "Giao dịch mới";
+
+        const values = [
+          row.location,
+          t.date,
+          kind,
+          `${t.amountMinor.toLocaleString("vi-VN")} ${currency}`,
+          t.note,
+          statusText,
+        ];
+
+        for (const value of values) {
+          tr.insertCell().textContent = value;
+        }
+
+        tr.cells[5].style.color = conflict
+          ? "#dc2626"
+          : duplicate
+            ? "#b45309"
+            : "#15803d";
+      }
+
+      excelPreview.hidden = result.rows.length === 0;
+      if (
+        result.conflicts.size === 0 &&
+        result.newRows.length > 0
+      ) {
+        pendingExcel = {
+          backup,
+          rows: result.newRows,
+        };
+
+        importExcelButton.disabled = false;
+      }
+
+      excelImportStatus.textContent =
+        `${file.name} · ` +
+        `${result.rows.length} giao dịch · ` +
+        `${result.newRows.length} giao dịch mới · ` +
+        `${result.duplicates.size} nghi trùng · ` +
+        `${result.conflicts.size} xung đột.`;
+
+    } catch (error) {
+      if (version !== excelReadVersion) return;
+
+      excelImportStatus.textContent =
+        error instanceof Error
+          ? error.message
+          : "Không đọc được Excel.";
+    }
+  };
+
+  importExcelButton.onclick = async () => {
+    const pending = pendingExcel;
+
+    if (!pending) return;
+
+    const confirmed = window.confirm(
+      `Xác nhận nhập ${pending.rows.length} giao dịch từ Excel?`
+    );
+
+    if (!confirmed) return;
+
+    pendingExcel = null;
+
+    importExcelButton.disabled = true;
+    excelFile.disabled = true;
+
+    excelImportStatus.textContent = "Đang nhập Excel...";
+
+    try {
+      const imported = await commitExcelImport(
+        db,
+        pending.backup,
+        pending.rows
+      );
+
+      excelImportStatus.textContent =
+        `Đã nhập thành công ${imported} giao dịch từ Excel.`;
+
+    } catch (error) {
+      excelImportStatus.textContent =
+        error instanceof Error
+          ? error.message
+          : "Nhập Excel thất bại.";
+
+    } finally {
+      excelFile.value = "";
+      excelFile.disabled = false;
+
+      excelPreview.hidden = true;
+      excelPreviewBody.replaceChildren();
     }
   };
 
