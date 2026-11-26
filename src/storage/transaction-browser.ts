@@ -6,6 +6,7 @@ import { openDatabase } from "./database.js";
 import { createTransfer, transferMovement } from "../domain/finance/transfer.js";
 import type { Transfer } from "../domain/finance/transfer";
 import { categories } from "../domain/finance/category.js";
+import { summarizeMonth } from "../domain/finance/monthly-summary.js";
 
 const accountSelect = document.querySelector<HTMLSelectElement>("#account")!;
 const form = document.querySelector<HTMLFormElement>("#entry")!;
@@ -147,6 +148,48 @@ async function start() {
         }
     };
 
+    const reportMonth = document.querySelector<HTMLInputElement>("#report-month")!;
+    const reportTotals = document.querySelector<HTMLElement>("#report-totals")!;
+    const reportBody = document.querySelector<HTMLTableSectionElement>("#report-categories")!;
+
+    reportMonth.value = today().slice(0, 7);
+
+    function renderReport(entries: Transaction[], account: Account) {
+        reportBody.replaceChildren();
+
+        if (!reportMonth.value) {
+            reportTotals.textContent = "Chọn tháng để xem báo cáo.";
+            return;
+        }
+
+        const summary = summarizeMonth(entries, account.id, reportMonth.value);
+        const money = (amount: number) =>
+            `${amount.toLocaleString("vi-VN")} ${account.currency}`;
+
+        reportTotals.textContent =
+            `Thu: ${money(summary.income)} · Chi: ${money(summary.expense)} · ` +
+            `Chênh lệch: ${money(summary.net)}`;
+
+        const labels: Readonly<Record<string, string>> = categories.expense;
+        const sorted = [...summary.expenseByCategory].sort((a, b) => b[1] - a[1]);
+
+        for (const [categoryId, amount] of sorted) {
+            const row = reportBody.insertRow();
+            row.insertCell().textContent = labels[categoryId] ?? "Chưa phân loại";
+            row.insertCell().textContent = money(amount);
+        }
+
+        if (sorted.length === 0) {
+            const cell = reportBody.insertRow().insertCell();
+            cell.colSpan = 2;
+            cell.textContent = "Tháng này chưa có khoản chi.";
+        }
+    }
+
+    reportMonth.onchange = () => {
+        void refresh().catch(reportReadError);
+    };
+
     async function refresh() {
         const account = selectedAccount();
         dateInput.min = account.openingBalanceDate;
@@ -163,6 +206,7 @@ async function start() {
             ]);
 
         if (accountSelect.value !== account.id) return;
+        renderReport(entries, account);
 
         const isCard = account.kind === "credit_card";
         const changes = entries.map((entry) =>
