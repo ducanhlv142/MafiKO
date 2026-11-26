@@ -1,4 +1,5 @@
 import type { Account } from "./account";
+import type { ExpenseCategoryId, IncomeCategoryId } from "./category";
 
 export interface Transaction {
   id: string;
@@ -7,6 +8,7 @@ export interface Transaction {
   amountMinor: number;
   date: string;
   note: string;
+  categoryId?: ExpenseCategoryId | IncomeCategoryId;
 }
 
 export function toMovement(transaction: Transaction): number {

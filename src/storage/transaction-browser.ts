@@ -5,9 +5,12 @@ import { calculateBalance } from "../domain/finance/balance.js";
 import { openDatabase } from "./database.js";
 import { createTransfer, transferMovement } from "../domain/finance/transfer.js";
 import type { Transfer } from "../domain/finance/transfer";
+import { categories } from "../domain/finance/category.js";
 
 const accountSelect = document.querySelector<HTMLSelectElement>("#account")!;
 const form = document.querySelector<HTMLFormElement>("#entry")!;
+const kindSelect = form.querySelector<HTMLSelectElement>('select[name="kind"]')!;
+const categorySelect = form.querySelector<HTMLSelectElement>("#entry-category")!;
 const dateInput = document.querySelector<HTMLInputElement>("#date")!;
 const save = document.querySelector<HTMLButtonElement>("#save")!;
 const balance = document.querySelector<HTMLElement>("#balance")!;
@@ -36,6 +39,18 @@ function saveEntry(db: IDBDatabase, entry: Transaction): Promise<void> {
         tx.objectStore("transactions").add(entry);
     });
 }
+
+function updateCategories() {
+    const kind = kindSelect.value === "income" ? "income" : "expense";
+    categorySelect.replaceChildren();
+
+    for (const [id, label] of Object.entries(categories[kind])) {
+        categorySelect.add(new Option(label, id));
+    }
+}
+
+kindSelect.onchange = updateCategories;
+updateCategories();
 
 async function start() {
     const db = await openDatabase();
@@ -153,22 +168,30 @@ async function start() {
         const changes = entries.map((entry) =>
             isCard ? -toMovement(entry) : toMovement(entry),
         );
-        const current = calculateBalance(account.openingBalanceMinor, changes);
+
         const accountTransfers = [...outgoing, ...incoming];
 
         for (const transfer of accountTransfers) {
             const movement = transferMovement(transfer, account.id);
             changes.push(isCard ? -movement : movement);
         }
+        const current = calculateBalance(account.openingBalanceMinor, changes);
+
         const money = (n: number) => `${n.toLocaleString("vi-VN")} ${account.currency}`;
 
         balance.textContent = `${isCard ? "Dư nợ" : "Số dư"}: ${money(current)}`;
         historyList.replaceChildren();
 
-        const rows = entries.map((entry) => ({
-            date: entry.date,
-            text: `${entry.kind === "expense" ? "Chi" : "Thu"} ${money(entry.amountMinor)} · ${entry.note}`,
-        }));
+        const rows = entries.map((entry) => {
+            const label = entry.kind === "expense" ? "Chi" : "Thu";
+            const labels: Readonly<Record<string, string>> = categories[entry.kind];
+            const category = labels[entry.categoryId ?? ""] ?? "Chưa phân loại";
+
+            return {
+                date: entry.date,
+                text: `${label} ${money(entry.amountMinor)} · ${category} · ${entry.note}`,
+            };
+        });
 
         for (const transfer of accountTransfers) {
             const sent = transfer.fromAccountId === account.id;
@@ -215,11 +238,18 @@ async function start() {
             return;
         }
         if (kind !== "income" && kind !== "expense") return;
+        const categoryId = categorySelect.value as NonNullable<Transaction["categoryId"]>;
+
+        if (!Object.hasOwn(categories[kind], categoryId)) {
+            status.textContent = "Chọn danh mục phù hợp với loại giao dịch.";
+            return;
+        }
 
         const entry: Transaction = {
             id: crypto.randomUUID(),
             accountId: selectedAccount().id,
             kind,
+            categoryId,
             amountMinor: amount,
             date: dateInput.value,
             note,
@@ -229,6 +259,7 @@ async function start() {
         try {
             await saveEntry(db, entry);
             form.reset();
+            updateCategories();
             dateInput.value = today();
             status.textContent = "Đã lưu giao dịch.";
             await refresh().catch(reportReadError);
