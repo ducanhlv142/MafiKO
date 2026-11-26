@@ -4,7 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm test && npm run build"
   },
   "repository": {
     "type": "git",
@@ -19,7 +23,9 @@
   },
   "homepage": "https://github.com/ducanhlv142/MafiKO#readme",
   "devDependencies": {
-    "typescript": "^7.0.2"
+    "fake-indexeddb": "^6.2.8",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.2"
   },
   "dependencies": {
     "exceljs": "4.4.0"
