@@ -7,6 +7,7 @@ import { createTransfer, transferMovement } from "../domain/finance/transfer.js"
 import type { Transfer } from "../domain/finance/transfer";
 import { categories } from "../domain/finance/category.js";
 import { summarizeMonth } from "../domain/finance/monthly-summary.js";
+import { changeCategory } from "./change-category.js";
 
 const accountSelect = document.querySelector<HTMLSelectElement>("#account")!;
 const form = document.querySelector<HTMLFormElement>("#entry")!;
@@ -226,12 +227,13 @@ async function start() {
         balance.textContent = `${isCard ? "Dư nợ" : "Số dư"}: ${money(current)}`;
         historyList.replaceChildren();
 
-        const rows = entries.map((entry) => {
+        const rows: { date: string; text: string; entry?: Transaction }[] = entries.map((entry) => {
             const label = entry.kind === "expense" ? "Chi" : "Thu";
             const labels: Readonly<Record<string, string>> = categories[entry.kind];
             const category = labels[entry.categoryId ?? ""] ?? "Chưa phân loại";
 
             return {
+                entry,
                 date: entry.date,
                 text: `${label} ${money(entry.amountMinor)} · ${category} · ${entry.note}`,
             };
@@ -255,6 +257,41 @@ async function start() {
         for (const row of rows) {
             const li = document.createElement("li");
             li.textContent = `${row.date} · ${row.text}`;
+            const entry = row.entry;
+
+            if (entry) {
+                const select = document.createElement("select");
+                select.setAttribute("aria-label", `Đổi danh mục cho ${entry.note}`);
+
+                const placeholder = new Option("Chưa phân loại", "");
+                placeholder.disabled = true;
+                select.add(placeholder);
+
+                for (const [id, label] of Object.entries(categories[entry.kind])) {
+                    select.add(new Option(label, id));
+                }
+
+                select.value = entry.categoryId ?? "";
+
+                select.onchange = async () => {
+                    const categoryId = select.value as NonNullable<Transaction["categoryId"]>;
+                    select.disabled = true;
+
+                    try {
+                        await changeCategory(db, entry.id, categoryId);
+                    } catch (error) {
+                        select.value = entry.categoryId ?? "";
+                        select.disabled = false;
+                        status.textContent = error instanceof Error ? error.message : "Đổi danh mục thất bại.";
+                        return;
+                    }
+
+                    status.textContent = "Đã cập nhật danh mục.";
+                    await refresh().catch(reportReadError);
+                };
+
+                li.append(" ", select);
+            }
             historyList.append(li);
         }
     }
