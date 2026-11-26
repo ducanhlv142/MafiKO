@@ -1,6 +1,6 @@
 import type { FinanceBackup } from "./backup";
 import type { ExcelImportRow } from "./import-excel";
-
+import { FINANCE_STORES } from "./backup.js";
 import { parseBackup } from "./restore.js";
 
 export function commitExcelImport(
@@ -10,7 +10,7 @@ export function commitExcelImport(
 ): Promise<number> {
     return new Promise((resolve, reject) => {
         const tx = db.transaction(
-            ["accounts", "transactions", "transfers", "budgets"],
+            [...FINANCE_STORES],
             "readwrite"
         );
 
@@ -35,13 +35,20 @@ export function commitExcelImport(
         const transactionRequest = transactions.getAll();
         const budgetRequest =
             tx.objectStore("budgets").getAll();
+        const loanRequest =
+            tx.objectStore("loans").getAll();
+
+        const loanPaymentRequest =
+            tx.objectStore("loanPayments").getAll();
         const transferRequest = transfers.getAll();
 
         transferRequest.onsuccess = () => {
             try {
                 const current: FinanceBackup = {
                     app: "MafiKO",
-                    formatVersion: 2,
+                    formatVersion: 3,
+                    loans: loanRequest.result,
+                    loanPayments: loanPaymentRequest.result,
                     budgets: budgetRequest.result,
                     exportedAt: new Date().toISOString(),
                     accounts: accountRequest.result,
@@ -49,11 +56,7 @@ export function commitExcelImport(
                     transfers: transferRequest.result,
                 };
 
-                for (const key of [
-                    "accounts",
-                    "transactions",
-                    "transfers",
-                ] as const) {
+                for (const key of FINANCE_STORES) {
                     if (
                         JSON.stringify(current[key]) !==
                         JSON.stringify(expected[key])

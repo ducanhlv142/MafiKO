@@ -12,6 +12,17 @@ import { deleteTransaction } from "./delete-transaction.js";
 import { deleteTransfer } from "./delete-transfer.js";
 import { updateTransaction } from "./update-transaction.js";
 import { updateTransfer } from "./update-transfer.js";
+import { createBackup } from "./backup.js";
+
+import {
+    getAccountBalance,
+    getReportTransactions,
+} from "../domain/finance/ledger.js";
+
+import {
+    loanCashMovement,
+    paymentCashMovement,
+} from "../domain/finance/debt.js";
 
 const accountSelect = document.querySelector<HTMLSelectElement>("#account")!;
 const form = document.querySelector<HTMLFormElement>("#entry")!;
@@ -473,32 +484,30 @@ async function start() {
         const account = selectedAccount();
         dateInput.min = account.openingBalanceDate;
 
-        const store = db.transaction("transactions").objectStore("transactions");
-        const tx = db.transaction(["transactions", "transfers"], "readonly");
-        const transfers = tx.objectStore("transfers");
-
-        const [entries, outgoing, incoming]: [Transaction[], Transfer[], Transfer[]] =
-            await Promise.all([
-                read(tx.objectStore("transactions").index("byAccount").getAll(account.id)),
-                read(transfers.index("bySource").getAll(account.id)),
-                read(transfers.index("byDestination").getAll(account.id)),
-            ]);
+        const backup = await createBackup(db);
 
         if (accountSelect.value !== account.id) return;
-        renderReport(entries, account);
 
-        const isCard = account.kind === "credit_card";
-        const changes = entries.map((entry) =>
-            isCard ? -toMovement(entry) : toMovement(entry),
+        const entries = backup.transactions.filter(
+            t => t.accountId === account.id
         );
 
-        const accountTransfers = [...outgoing, ...incoming];
+        const accountTransfers = backup.transfers.filter(
+            t =>
+                t.fromAccountId === account.id ||
+                t.toAccountId === account.id
+        );
 
-        for (const transfer of accountTransfers) {
-            const movement = transferMovement(transfer, account.id);
-            changes.push(isCard ? -movement : movement);
-        }
-        const current = calculateBalance(account.openingBalanceMinor, changes);
+        const reportEntries = getReportTransactions(backup);
+
+        renderReport(reportEntries, account);
+
+        const isCard = account.kind === "credit_card";
+
+        const current = getAccountBalance(
+            account,
+            backup
+        );
 
         const money = (n: number) => `${n.toLocaleString("vi-VN")} ${account.currency}`;
 
@@ -533,6 +542,58 @@ async function start() {
                 transfer,
                 date: transfer.date,
                 text: `${direction} · ${money(transfer.amountMinor)}${note}`,
+            });
+        }
+
+        const loanMap = new Map(
+            backup.loans.map(loan => [loan.id, loan])
+        );
+
+        for (const loan of backup.loans) {
+            if (loan.accountId !== account.id) continue;
+
+            const movement = loanCashMovement(
+                loan,
+                account.id
+            );
+
+            const label = loan.direction === "borrowed"
+                ? "Nhận tiền vay"
+                : "Cho vay";
+
+            rows.push({
+                date: loan.startDate,
+                text:
+                    `${label} · ${money(movement)} · ` +
+                    `${loan.counterparty}`,
+            });
+        }
+
+        for (const payment of backup.loanPayments) {
+            if (payment.accountId !== account.id) continue;
+
+            const loan = loanMap.get(payment.loanId);
+
+            if (!loan) continue;
+
+            const movement = paymentCashMovement(
+                loan,
+                payment,
+                account.id
+            );
+
+            const label = loan.direction === "borrowed"
+                ? "Trả nợ"
+                : "Thu hồi nợ";
+
+            rows.push({
+                date: payment.date,
+                text:
+                    `${label} · ${money(movement)} · ` +
+                    `${loan.counterparty} · ` +
+                    `Gốc: ${money(payment.principalMinor)} · ` +
+                    `Lãi: ${money(payment.interestMinor)} · ` +
+                    `Phí: ${money(payment.feeMinor)}`,
             });
         }
 

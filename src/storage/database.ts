@@ -1,5 +1,5 @@
 const DATABASE_NAME = "mafiko";
-const DATABASE_VERSION = 4;
+const DATABASE_VERSION = 5;
 
 export function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -45,6 +45,53 @@ export function openDatabase(): Promise<IDBDatabase> {
         store.createIndex(
           "byMonthCurrency",
           ["month", "currency"]
+        );
+      }
+
+      if (event.oldVersion < 5) {
+        const loans = db.createObjectStore(
+          "loans",
+          { keyPath: "id" }
+        );
+
+        loans.createIndex(
+          "byAccount",
+          "accountId"
+        );
+
+        loans.createIndex(
+          "byDirection",
+          "direction"
+        );
+
+        loans.createIndex(
+          "byCurrency",
+          "currency"
+        );
+
+        loans.createIndex(
+          "byDueDate",
+          "dueDate"
+        );
+
+        const payments = db.createObjectStore(
+          "loanPayments",
+          { keyPath: "id" }
+        );
+
+        payments.createIndex(
+          "byLoan",
+          "loanId"
+        );
+
+        payments.createIndex(
+          "byAccount",
+          "accountId"
+        );
+
+        payments.createIndex(
+          "byDate",
+          "date"
         );
       }
     };

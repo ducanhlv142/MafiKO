@@ -1,5 +1,5 @@
 import type { Account } from "../domain/finance/account";
-
+import { getReportTransactions } from "../domain/finance/ledger.js";
 import { categories } from "../domain/finance/category.js";
 import {
     summarizeBudget,
@@ -128,6 +128,9 @@ async function start() {
 
         if (version !== refreshVersion) return;
 
+        const reportTransactions =
+            getReportTransactions(backup);
+
         const budgets = backup.budgets.filter(
             b => b.month === month &&
                 b.currency === currency
@@ -143,7 +146,7 @@ async function start() {
             const summary = summarizeBudget(
                 budget,
                 backup.accounts,
-                backup.transactions
+                reportTransactions
             );
 
             totalLimit += budget.limitMinor;
@@ -292,7 +295,7 @@ async function start() {
                 .map(a => a.id)
         );
 
-        const allExpenses = backup.transactions
+        const allExpenses = reportTransactions
             .filter(t =>
                 t.kind === "expense" &&
                 t.date.slice(0, 7) === month &&

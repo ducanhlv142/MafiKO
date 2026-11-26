@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>MafiKO · Vay và cho vay</title>
+</head>
+
+<body>
+    <nav>
+        <a href="./account-demo.html">Tài khoản</a> |
+        <a href="./transactions.html">Thu chi</a> |
+        <a href="./budgets.html">Ngân sách</a>
+    </nav>
+
+    <h1>Quản lý vay và cho vay</h1>
+
+    <h2>Tạo khoản vay</h2>
+
+    <form id="loan-form">
+
+        <p>
+            <label>Loại
+                <select id="loan-direction">
+                    <option value="borrowed">Tiền mình vay</option>
+                    <option value="lent">Tiền mình cho vay</option>
+                </select>
+            </label>
+        </p>
+
+        <p>
+            <label>Đối tác
+                <input id="loan-counterparty" maxlength="100" placeholder="Tên người hoặc tổ chức" required>
+            </label>
+        </p>
+
+        <p>
+            <label>Tài khoản
+                <select id="loan-account" required></select>
+            </label>
+        </p>
+
+        <p>
+            <label>Tiền gốc
+                <input id="loan-principal" type="number" min="1" step="1" required>
+            </label>
+        </p>
+
+        <p>
+            <label>Lãi suất năm (%)
+                <input id="loan-rate" type="number" min="0" step="0.01" value="0" required>
+            </label>
+        </p>
+
+        <p>
+            <label>Ngày bắt đầu
+                <input id="loan-start" type="date" required>
+            </label>
+        </p>
+
+        <p>
+            <label>Ngày đáo hạn
+                <input id="loan-due" type="date">
+            </label>
+        </p>
+
+        <p>
+            <label>Ghi chú
+                <input id="loan-note" maxlength="200">
+            </label>
+        </p>
+
+        <button id="loan-save" type="submit" disabled>
+            Lưu khoản vay
+        </button>
+
+    </form>
+
+    <hr>
+
+    <h2>Tổng quan dư nợ</h2>
+
+    <label>Tiền tệ
+        <select id="loan-currency">
+            <option value="VND">VND</option>
+            <option value="JPY">JPY</option>
+        </select>
+    </label>
+
+    <p id="loan-totals"></p>
+
+    <h2>Danh sách khoản vay</h2>
+
+    <table border="1" cellpadding="8">
+        <thead>
+            <tr>
+                <th>Loại</th>
+                <th>Đối tác</th>
+                <th>Tài khoản</th>
+                <th>Tiền gốc</th>
+                <th>Đã trả / Thu hồi gốc</th>
+                <th>Gốc còn lại</th>
+                <th>Lãi suất năm</th>
+                <th>Ngày bắt đầu</th>
+                <th>Đáo hạn</th>
+                <th>Trạng thái</th>
+            </tr>
+        </thead>
+
+        <tbody id="loan-list"></tbody>
+    </table>
+
+    <p id="loan-status" role="status"></p>
+
+    <script type="module" src="./dist-web/storage/loan-browser.js">
+    </script>
+</body>
+
+</html>

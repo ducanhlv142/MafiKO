@@ -4,6 +4,11 @@ import { calculateBalance } from "../domain/finance/balance.js";
 import { toMovement } from "../domain/finance/transaction.js";
 import { transferMovement } from "../domain/finance/transfer.js";
 import { summarizeBudget } from "../domain/finance/budget.js";
+import {
+    getAccountBalance,
+    getReportTransactions,
+    getLoanNetValue,
+} from "../domain/finance/ledger.js";
 
 const ExcelJS = (
     globalThis as typeof globalThis & {
@@ -71,6 +76,9 @@ export async function createExcelWorkbook(
     const accountMap = new Map(
         backup.accounts.map(a => [a.id, a])
     );
+
+    const reportTransactions =
+        getReportTransactions(backup);
 
     const transactionsSheet = workbook.addWorksheet("Transactions");
 
@@ -180,19 +188,9 @@ export async function createExcelWorkbook(
     for (const account of backup.accounts) {
         const isCard = account.kind === "credit_card";
 
-        const changes = backup.transactions
-            .filter(t => t.accountId === account.id)
-            .map(t => toMovement(t));
-
-        for (const transfer of backup.transfers) {
-            changes.push(
-                transferMovement(transfer, account.id)
-            );
-        }
-
-        const balance = calculateBalance(
-            account.openingBalanceMinor,
-            isCard ? changes.map(v => -v) : changes
+        const balance = getAccountBalance(
+            account,
+            backup
         );
 
         const net = isCard ? -balance : balance;
@@ -208,6 +206,30 @@ export async function createExcelWorkbook(
         currencyTotals.set(
             account.currency,
             (currencyTotals.get(account.currency) ?? 0) + net
+        );
+    }
+
+    for (const loan of backup.loans) {
+        const net = getLoanNetValue(
+            loan,
+            backup.loanPayments
+        );
+
+        const label = loan.direction === "borrowed"
+            ? "Nợ phải trả"
+            : "Khoản phải thu";
+
+        overviewSheet.addRow({
+            account: loan.counterparty,
+            kind: label,
+            currency: loan.currency,
+            balance: Math.abs(net),
+            net,
+        });
+
+        currencyTotals.set(
+            loan.currency,
+            (currencyTotals.get(loan.currency) ?? 0) + net
         );
     }
 
@@ -245,7 +267,7 @@ export async function createExcelWorkbook(
 
     const monthlyTotals = new Map<string, MonthlyTotal>();
 
-    for (const t of backup.transactions) {
+    for (const t of reportTransactions) {
         const account = accountMap.get(t.accountId)!;
         const month = t.date.slice(0, 7);
         const key = `${month}-${account.currency}`;
@@ -328,7 +350,7 @@ export async function createExcelWorkbook(
 
     const categoryTotals = new Map<string, CategoryTotal>();
 
-    for (const t of backup.transactions) {
+    for (const t of reportTransactions) {
         const account = accountMap.get(t.accountId)!;
 
         const month = t.date.slice(0, 7);
@@ -419,7 +441,7 @@ export async function createExcelWorkbook(
         const summary = summarizeBudget(
             budget,
             backup.accounts,
-            backup.transactions
+            reportTransactions
         );
 
         const row = budgetsSheet.addRow({

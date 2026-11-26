@@ -1,6 +1,18 @@
 import type { FinanceBackup } from "./backup";
 import { categories } from "../domain/finance/category.js";
 import { isValidBudget } from "../domain/finance/budget.js";
+import { FINANCE_STORES } from "./backup.js";
+
+import type {
+    Loan,
+    LoanPayment,
+} from "../domain/finance/debt";
+
+import {
+    isValidLoan,
+    isValidLoanPayment,
+    summarizeLoan,
+} from "../domain/finance/debt.js";
 
 function validDate(value: unknown): value is string {
     if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -27,7 +39,7 @@ function checkIds(rows: unknown[], label: string) {
 export function parseBackup(text: string): FinanceBackup {
     const data = JSON.parse(text);
 
-    if (data?.app !== "MafiKO" || (data.formatVersion !== 1 && data.formatVersion !== 2) ||
+    if (data?.app !== "MafiKO" || ![1, 2, 3].includes(data.formatVersion) ||
         typeof data.exportedAt !== "string" || !Number.isFinite(Date.parse(data.exportedAt)) ||
         !Array.isArray(data.accounts) || !Array.isArray(data.transactions) ||
         !Array.isArray(data.transfers)) {
@@ -37,6 +49,23 @@ export function parseBackup(text: string): FinanceBackup {
     if (data.formatVersion === 1) {
         data.budgets = [];
     }
+
+    if (data.formatVersion < 3) {
+        data.loans = [];
+        data.loanPayments = [];
+    }
+
+    if (
+        !Array.isArray(data.loans) ||
+        !Array.isArray(data.loanPayments)
+    ) {
+        throw new Error(
+            "Danh sách khoản vay hoặc thanh toán không hợp lệ."
+        );
+    }
+
+    checkIds(data.loans, "Khoản vay");
+    checkIds(data.loanPayments, "Thanh toán khoản vay");
 
     if (!Array.isArray(data.budgets)) {
         throw new Error("Danh sách ngân sách không hợp lệ.");
@@ -93,19 +122,78 @@ export function parseBackup(text: string): FinanceBackup {
         }
     }
 
+    const loans = new Map<string, Loan>();
+
+    for (const loan of data.loans) {
+        if (!isValidLoan(loan)) {
+            throw new Error(
+                "Bản sao chứa khoản vay không hợp lệ."
+            );
+        }
+
+        const account = accounts.get(loan.accountId);
+
+        if (
+            !account ||
+            account.currency !== loan.currency ||
+            loan.startDate < account.start
+        ) {
+            throw new Error(
+                `Khoản vay ${loan.id} có tài khoản không hợp lệ.`
+            );
+        }
+
+        loans.set(loan.id, loan);
+    }
+
+    const paymentsByLoan =
+        new Map<string, LoanPayment[]>();
+
+    for (const payment of data.loanPayments) {
+        if (!isValidLoanPayment(payment)) {
+            throw new Error(
+                "Bản sao chứa khoản thanh toán không hợp lệ."
+            );
+        }
+
+        const loan = loans.get(payment.loanId);
+        const account = accounts.get(payment.accountId);
+
+        if (
+            !loan ||
+            !account ||
+            account.currency !== loan.currency ||
+            payment.date < loan.startDate ||
+            payment.date < account.start
+        ) {
+            throw new Error(
+                `Khoản thanh toán ${payment.id} không hợp lệ.`
+            );
+        }
+
+        const payments =
+            paymentsByLoan.get(loan.id) ?? [];
+
+        payments.push(payment);
+
+        paymentsByLoan.set(loan.id, payments);
+    }
+
+    for (const loan of loans.values()) {
+        summarizeLoan(
+            loan,
+            paymentsByLoan.get(loan.id) ?? []
+        );
+    }
+
     return {
         ...data,
-        formatVersion: 2,
+        formatVersion: 3,
     };
 }
 
 export function restoreBackup(db: IDBDatabase, backup: FinanceBackup): Promise<void> {
-    const stores = [
-        "accounts",
-        "transactions",
-        "transfers",
-        "budgets",
-    ] as const;
+    const stores = FINANCE_STORES;
 
     return new Promise((resolve, reject) => {
         const tx = db.transaction([...stores], "readwrite");

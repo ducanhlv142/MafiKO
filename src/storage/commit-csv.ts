@@ -3,7 +3,7 @@ import type { Transaction } from "../domain/finance/transaction";
 import type { Transfer } from "../domain/finance/transfer";
 import type { FinanceBackup } from "./backup";
 import type { ImportRow } from "./import-csv";
-
+import { FINANCE_STORES } from "./backup.js";
 import { prepareCsvImport } from "./import-csv.js";
 import { detectDuplicates } from "./detect-duplicates.js";
 
@@ -21,7 +21,7 @@ export function commitCsvImport(
 ): Promise<number> {
     return new Promise((resolve, reject) => {
         const tx = db.transaction(
-            ["accounts", "transactions", "transfers", "budgets"],
+            [...FINANCE_STORES],
             "readwrite"
         );
 
@@ -46,13 +46,20 @@ export function commitCsvImport(
         const transactionRequest = transactions.getAll();
         const budgetRequest =
             tx.objectStore("budgets").getAll();
+        const loanRequest =
+            tx.objectStore("loans").getAll();
+
+        const loanPaymentRequest =
+            tx.objectStore("loanPayments").getAll();
         const transferRequest = transfers.getAll();
 
         transferRequest.onsuccess = () => {
             try {
                 const backup: FinanceBackup = {
                     app: "MafiKO",
-                    formatVersion: 2,
+                    formatVersion: 3,
+                    loans: loanRequest.result,
+                    loanPayments: loanPaymentRequest.result,
                     budgets: budgetRequest.result,
                     exportedAt: new Date().toISOString(),
                     accounts: accountRequest.result as Account[],
