@@ -1,10 +1,12 @@
 <!doctype html>
 <html lang="vi">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MafiKO · Tài khoản</title>
 </head>
+
 <body>
   <h1>Tài khoản của tôi</h1>
   <p><a href="./transactions.html">Mở sổ thu chi →</a></p>
@@ -49,7 +51,17 @@
   <p id="status" role="status"></p>
   <h2>Danh sách tài khoản</h2>
   <ul id="accounts"></ul>
+  <button id="export-backup" type="button" disabled>Tải bản sao lưu JSON</button>
+  <p id="backup-status" role="status"></p>
+  <p>
+    <label>Chọn bản sao để khôi phục
+      <input id="backup-file" type="file" accept=".json,application/json">
+    </label>
+  </p>
+  <p id="restore-preview" role="status"></p>
+  <button id="restore-backup" type="button" disabled>Khôi phục và thay thế sổ</button>
 
   <script type="module" src="./dist-web/storage/account-browser.js"></script>
 </body>
+
 </html>
