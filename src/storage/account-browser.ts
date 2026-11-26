@@ -71,9 +71,11 @@ async function start() {
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 
       backupStatus.textContent =
-        `Đã tạo bản sao gồm ${backup.accounts.length} tài khoản, ` +
-        `${backup.transactions.length} giao dịch thu/chi và ` +
-        `${backup.transfers.length} lần chuyển tiền.`;
+        `Đã tạo bản sao gồm ` +
+        `${backup.accounts.length} tài khoản, ` +
+        `${backup.transactions.length} giao dịch thu/chi, ` +
+        `${backup.transfers.length} lần chuyển tiền và ` +
+        `${backup.budgets.length} ngân sách.`;
     } catch (error) {
       backupStatus.textContent =
         error instanceof Error ? error.message : "Tạo bản sao lưu thất bại.";
@@ -554,8 +556,11 @@ async function start() {
 
       pending = backup;
       preview.textContent =
-        `${file.name} · ${backup.accounts.length} tài khoản · ` +
-        `${backup.transactions.length} giao dịch · ${backup.transfers.length} lần chuyển.`;
+        `${file.name} · ` +
+        `${backup.accounts.length} tài khoản · ` +
+        `${backup.transactions.length} giao dịch · ` +
+        `${backup.transfers.length} lần chuyển · ` +
+        `${backup.budgets.length} ngân sách.`;
       restoreButton.disabled = false;
     } catch (error) {
       if (backupFile.files?.[0] !== file) return;
@@ -568,9 +573,16 @@ async function start() {
     if (!backup) return;
 
     const confirmed = window.confirm(
-      `Thay thế toàn bộ sổ trên thiết bị này bằng ${backupFile.files?.[0]?.name}?\n` +
-      `Sổ sau khôi phục sẽ có ${backup.accounts.length} tài khoản, ` +
-      `${backup.transactions.length} giao dịch và ${backup.transfers.length} lần chuyển.`,
+      `Thay thế toàn bộ sổ trên thiết bị này bằng ` +
+      `${backupFile.files?.[0]?.name}?\n\n` +
+
+      `Sổ sau khôi phục sẽ có:\n` +
+      `${backup.accounts.length} tài khoản\n` +
+      `${backup.transactions.length} giao dịch\n` +
+      `${backup.transfers.length} lần chuyển\n` +
+      `${backup.budgets.length} ngân sách\n\n` +
+
+      "Toàn bộ dữ liệu và ngân sách hiện tại sẽ bị thay thế."
     );
     if (!confirmed) return;
 

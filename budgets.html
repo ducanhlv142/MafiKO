@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="vi">
+
+<style>
+    .budget-progress {
+        width: 140px;
+        height: 10px;
+        background: #e5e7eb;
+        border-radius: 6px;
+        overflow: hidden;
+        margin-top: 6px;
+    }
+
+    .budget-progress-fill {
+        height: 100%;
+        border-radius: 6px;
+        transition: width 0.25s ease;
+    }
+
+    .budget-normal {
+        color: #15803d;
+    }
+
+    .budget-warning {
+        color: #b45309;
+    }
+
+    .budget-reached,
+    .budget-exceeded {
+        color: #dc2626;
+        font-weight: bold;
+    }
+
+    .budget-negative {
+        color: #dc2626;
+        font-weight: bold;
+    }
+
+    #budget-alerts li {
+        margin: 6px 0;
+    }
+</style>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>MafiKO · Ngân sách</title>
+</head>
+
+<body>
+    <nav>
+        <a href="./account-demo.html">Tài khoản</a> |
+        <a href="./transactions.html">Thu chi</a> |
+        <a href="./budgets.html">Ngân sách</a>
+    </nav>
+
+    <h1>Quản lý ngân sách</h1>
+
+    <p>
+        <label>Tháng
+            <input id="budget-month" type="month" required>
+        </label>
+
+        <label>Tiền tệ
+            <select id="budget-currency">
+                <option value="VND">VND</option>
+                <option value="JPY">JPY</option>
+            </select>
+        </label>
+    </p>
+    <h2>Thiết lập ngân sách</h2>
+
+    <form id="budget-form">
+        <p>
+            <label>Danh mục
+                <select id="budget-category" required></select>
+            </label>
+        </p>
+
+        <p>
+            <label>Hạn mức
+                <input id="budget-limit" type="number" min="1" step="1" placeholder="Nhập số tiền" required>
+            </label>
+        </p>
+
+        <button id="budget-save" type="submit" disabled>
+            Lưu ngân sách
+        </button>
+    </form>
+
+    <hr>
+    <h2>Tổng quan ngân sách</h2>
+
+    <p id="budget-totals"></p>
+
+    <p id="budget-spending"></p>
+
+    <h3>Cảnh báo ngân sách</h3>
+
+    <ul id="budget-alerts"></ul>
+
+    <h2>Ngân sách theo danh mục</h2>
+
+    <table border="1" cellpadding="8">
+        <thead>
+            <tr>
+                <th>Danh mục</th>
+                <th>Hạn mức</th>
+                <th>Đã chi</th>
+                <th>Còn lại</th>
+                <th>Sử dụng</th>
+                <th>Trạng thái</th>
+                <th>Thao tác</th>
+            </tr>
+        </thead>
+
+        <tbody id="budget-list"></tbody>
+    </table>
+
+    <p id="budget-status" role="status"></p>
+
+    <script type="module" src="./dist-web/storage/budget-browser.js">
+    </script>
+</body>
+
+</html>

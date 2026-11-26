@@ -21,7 +21,7 @@ export function commitCsvImport(
 ): Promise<number> {
     return new Promise((resolve, reject) => {
         const tx = db.transaction(
-            ["accounts", "transactions", "transfers"],
+            ["accounts", "transactions", "transfers", "budgets"],
             "readwrite"
         );
 
@@ -44,13 +44,16 @@ export function commitCsvImport(
 
         const accountRequest = accounts.getAll();
         const transactionRequest = transactions.getAll();
+        const budgetRequest =
+            tx.objectStore("budgets").getAll();
         const transferRequest = transfers.getAll();
 
         transferRequest.onsuccess = () => {
             try {
                 const backup: FinanceBackup = {
                     app: "MafiKO",
-                    formatVersion: 1,
+                    formatVersion: 2,
+                    budgets: budgetRequest.result,
                     exportedAt: new Date().toISOString(),
                     accounts: accountRequest.result as Account[],
                     transactions: transactionRequest.result as Transaction[],

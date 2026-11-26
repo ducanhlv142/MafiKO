@@ -1,5 +1,6 @@
 import type { FinanceBackup } from "./backup";
 import { categories } from "../domain/finance/category.js";
+import { isValidBudget } from "../domain/finance/budget.js";
 
 function validDate(value: unknown): value is string {
     if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -26,11 +27,27 @@ function checkIds(rows: unknown[], label: string) {
 export function parseBackup(text: string): FinanceBackup {
     const data = JSON.parse(text);
 
-    if (data?.app !== "MafiKO" || data.formatVersion !== 1 ||
+    if (data?.app !== "MafiKO" || (data.formatVersion !== 1 && data.formatVersion !== 2) ||
         typeof data.exportedAt !== "string" || !Number.isFinite(Date.parse(data.exportedAt)) ||
         !Array.isArray(data.accounts) || !Array.isArray(data.transactions) ||
         !Array.isArray(data.transfers)) {
-        throw new Error("Sai định dạng bản sao MafiKO phiên bản 1.");
+        throw new Error("Sai định dạng bản sao MafiKO.");
+    }
+
+    if (data.formatVersion === 1) {
+        data.budgets = [];
+    }
+
+    if (!Array.isArray(data.budgets)) {
+        throw new Error("Danh sách ngân sách không hợp lệ.");
+    }
+
+    checkIds(data.budgets, "Ngân sách");
+
+    for (const budget of data.budgets) {
+        if (!isValidBudget(budget)) {
+            throw new Error("Bản sao chứa ngân sách không hợp lệ.");
+        }
     }
 
     checkIds(data.accounts, "Tài khoản");
@@ -76,11 +93,19 @@ export function parseBackup(text: string): FinanceBackup {
         }
     }
 
-    return data;
+    return {
+        ...data,
+        formatVersion: 2,
+    };
 }
 
 export function restoreBackup(db: IDBDatabase, backup: FinanceBackup): Promise<void> {
-    const stores = ["accounts", "transactions", "transfers"] as const;
+    const stores = [
+        "accounts",
+        "transactions",
+        "transfers",
+        "budgets",
+    ] as const;
 
     return new Promise((resolve, reject) => {
         const tx = db.transaction([...stores], "readwrite");

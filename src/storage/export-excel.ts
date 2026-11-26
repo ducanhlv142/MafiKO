@@ -3,6 +3,7 @@ import { categories } from "../domain/finance/category.js";
 import { calculateBalance } from "../domain/finance/balance.js";
 import { toMovement } from "../domain/finance/transaction.js";
 import { transferMovement } from "../domain/finance/transfer.js";
+import { summarizeBudget } from "../domain/finance/budget.js";
 
 const ExcelJS = (
     globalThis as typeof globalThis & {
@@ -379,6 +380,72 @@ export async function createExcelWorkbook(
     categoriesSheet.getColumn("amount").numFmt = "#,##0";
     categoriesSheet.autoFilter = "A1:F1";
 
+    const budgetsSheet = workbook.addWorksheet("Budgets");
+
+    budgetsSheet.columns = [
+        { header: "ID", key: "id", width: 38 },
+        { header: "Tháng", key: "month", width: 16 },
+        { header: "Tiền tệ", key: "currency", width: 14 },
+        { header: "Danh mục", key: "category", width: 25 },
+        { header: "Hạn mức", key: "limit", width: 22 },
+        { header: "Đã sử dụng", key: "spent", width: 22 },
+        { header: "Còn lại", key: "remaining", width: 22 },
+        { header: "Sử dụng (%)", key: "usage", width: 18 },
+        { header: "Trạng thái", key: "status", width: 25 },
+    ];
+
+    const budgetStatusLabels = {
+        normal: "Trong hạn mức",
+        warning: "Sắp vượt",
+        reached: "Hết ngân sách",
+        exceeded: "Vượt ngân sách",
+    };
+
+    const budgetStatusColors = {
+        normal: "FF15803D",
+        warning: "FFB45309",
+        reached: "FFDC2626",
+        exceeded: "FFDC2626",
+    };
+
+    const sortedBudgets = [...backup.budgets].sort(
+        (a, b) =>
+            a.month.localeCompare(b.month) ||
+            a.currency.localeCompare(b.currency) ||
+            a.categoryId.localeCompare(b.categoryId)
+    );
+
+    for (const budget of sortedBudgets) {
+        const summary = summarizeBudget(
+            budget,
+            backup.accounts,
+            backup.transactions
+        );
+
+        const row = budgetsSheet.addRow({
+            id: budget.id,
+            month: budget.month,
+            currency: budget.currency,
+            category: categories.expense[budget.categoryId],
+            limit: budget.limitMinor,
+            spent: summary.spentMinor,
+            remaining: summary.remainingMinor,
+            usage: summary.usagePercent / 100,
+            status: budgetStatusLabels[summary.status],
+        });
+
+        row.getCell("status").font = {
+            bold: true,
+            color: {
+                argb: budgetStatusColors[summary.status],
+            },
+        };
+    }
+
+    budgetsSheet.getColumn("usage").numFmt = "0.0%";
+
+    budgetsSheet.autoFilter = "A1:I1";
+
     const moneyFormat = "#,##0;[Red]-#,##0;0";
 
     for (const ws of workbook.worksheets) {
@@ -447,6 +514,9 @@ export async function createExcelWorkbook(
                 "amount",
                 "income",
                 "expense",
+                "limit",
+                "spent",
+                "remaining",
             ].includes(column.key ?? "")) {
                 column.numFmt = moneyFormat;
             }
@@ -471,6 +541,10 @@ export async function createExcelWorkbook(
 
     categoriesSheet.properties.tabColor = {
         argb: "FF0891B2",
+    };
+
+    budgetsSheet.properties.tabColor = {
+        argb: "FFDB2777",
     };
 
     const buffer = await workbook.xlsx.writeBuffer();

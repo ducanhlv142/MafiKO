@@ -10,7 +10,7 @@ export function commitExcelImport(
 ): Promise<number> {
     return new Promise((resolve, reject) => {
         const tx = db.transaction(
-            ["accounts", "transactions", "transfers"],
+            ["accounts", "transactions", "transfers", "budgets"],
             "readwrite"
         );
 
@@ -33,13 +33,16 @@ export function commitExcelImport(
 
         const accountRequest = accounts.getAll();
         const transactionRequest = transactions.getAll();
+        const budgetRequest =
+            tx.objectStore("budgets").getAll();
         const transferRequest = transfers.getAll();
 
         transferRequest.onsuccess = () => {
             try {
                 const current: FinanceBackup = {
                     app: "MafiKO",
-                    formatVersion: 1,
+                    formatVersion: 2,
+                    budgets: budgetRequest.result,
                     exportedAt: new Date().toISOString(),
                     accounts: accountRequest.result,
                     transactions: transactionRequest.result,
