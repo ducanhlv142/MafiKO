@@ -1,50 +1,87 @@
 import type { Account } from "../domain/finance/account";
 import { openDatabase } from "./database.js";
 
-const output = document.querySelector<HTMLPreElement>("#output")!;
-const saveButton = document.querySelector<HTMLButtonElement>("#save-wallet")!;
+const form = document.querySelector<HTMLFormElement>("#account-form")!;
+const dateInput = document.querySelector<HTMLInputElement>("#opening-date")!;
+const saveButton = document.querySelector<HTMLButtonElement>("#save")!;
+const status = document.querySelector<HTMLParagraphElement>("#status")!;
+const list = document.querySelector<HTMLUListElement>("#accounts")!;
+
+function today(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function showAccounts(db: IDBDatabase) {
+  const request = db.transaction("accounts").objectStore("accounts").getAll();
+
+  request.onsuccess = () => {
+    const accounts: Account[] = request.result;
+    list.replaceChildren();
+
+    for (const account of accounts) {
+      const item = document.createElement("li");
+      const amount = account.openingBalanceMinor.toLocaleString("vi-VN");
+      const label = account.kind === "credit_card" ? "Dư nợ đầu kỳ" : "Số dư đầu kỳ";
+      item.textContent = `${account.name} · ${label}: ${amount} ${account.currency}`;
+      list.append(item);
+    }
+  };
+
+  request.onerror = () => {
+    status.textContent = "Không đọc được danh sách tài khoản.";
+  };
+}
 
 async function start() {
   const db = await openDatabase();
+  dateInput.value = today();
+  showAccounts(db);
+  saveButton.disabled = false;
 
-  function showWallet() {
-    const store = db.transaction("accounts", "readonly").objectStore("accounts");
-    const request = store.get("wallet-jpy");
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    if (saveButton.disabled) return;
 
-    request.onsuccess = () => {
-      const wallet: Account | undefined = request.result;
-      output.textContent = wallet
-        ? JSON.stringify(wallet, null, 2)
-        : "Chưa có ví trong database.";
+    const data = new FormData(form);
+    const name = String(data.get("name") ?? "").trim();
+    const balance = Number(data.get("balance"));
+
+    if (!name || !Number.isSafeInteger(balance)) {
+      status.textContent = "Nhập tên tài khoản và số dư nguyên hợp lệ.";
+      return;
+    }
+
+    const account: Account = {
+      id: crypto.randomUUID(),
+      name,
+      kind: data.get("kind") as Account["kind"],
+      currency: data.get("currency") as Account["currency"],
+      openingBalanceMinor: balance,
+      openingBalanceDate: dateInput.value,
     };
 
-    request.onerror = () => {
-      output.textContent = "Không đọc được ví.";
-    };
-  }
-
-  saveButton.onclick = () => {
-    const wallet: Account = {
-      id: "wallet-jpy",
-      name: "Ví tiền mặt",
-      kind: "cash",
-      currency: "JPY",
-      openingBalanceMinor: 5000,
-      openingBalanceDate: "2026-11-26",
-    };
-
+    saveButton.disabled = true;
     const tx = db.transaction("accounts", "readwrite");
-    tx.objectStore("accounts").put(wallet);
-    tx.oncomplete = showWallet;
+    tx.objectStore("accounts").add(account);
+
+    tx.oncomplete = () => {
+      form.reset();
+      dateInput.value = today();
+      saveButton.disabled = false;
+      status.textContent = `Đã thêm ${account.name}.`;
+      showAccounts(db);
+    };
+
     tx.onabort = () => {
-      output.textContent = "Lưu ví thất bại.";
+      saveButton.disabled = false;
+      status.textContent = "Lưu thất bại. Dữ liệu vừa nhập vẫn còn trong form.";
     };
   };
-
-  saveButton.disabled = false;
-  showWallet();
 }
 
 start().catch((error) => {
-  output.textContent = `Không mở được database: ${error.message}`;
+  status.textContent = `Không mở được database: ${error.message}`;
 });

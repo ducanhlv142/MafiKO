@@ -1,11 +1,54 @@
 <!doctype html>
 <html lang="vi">
+<head>
   <meta charset="utf-8">
-  <title>MafiKO · Ví JPY</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MafiKO · Tài khoản</title>
+</head>
+<body>
+  <h1>Tài khoản của tôi</h1>
 
-  <h1>Ví JPY</h1>
-  <button id="save-wallet" disabled>Lưu ví mẫu</button>
-  <pre id="output">Đang mở database…</pre>
+  <form id="account-form">
+    <p>
+      <label>Tên tài khoản
+        <input name="name" placeholder="Ví dụ: Ví đi làm" required maxlength="60">
+      </label>
+    </p>
+    <p>
+      <label>Loại tài khoản
+        <select name="kind">
+          <option value="cash">Tiền mặt</option>
+          <option value="bank">Ngân hàng</option>
+          <option value="e_wallet">Ví điện tử</option>
+          <option value="credit_card">Thẻ tín dụng</option>
+        </select>
+      </label>
+    </p>
+    <p>
+      <label>Tiền tệ
+        <select name="currency">
+          <option value="JPY">JPY</option>
+          <option value="VND">VND</option>
+        </select>
+      </label>
+    </p>
+    <p>
+      <label>Số dư đầu kỳ (với thẻ tín dụng, nhập số đang nợ)
+        <input name="balance" type="number" step="1" value="0" required>
+      </label>
+    </p>
+    <p>
+      <label>Ngày bắt đầu
+        <input id="opening-date" name="date" type="date" required>
+      </label>
+    </p>
+    <button id="save" type="submit" disabled>Thêm tài khoản</button>
+  </form>
+
+  <p id="status" role="status"></p>
+  <h2>Danh sách tài khoản</h2>
+  <ul id="accounts"></ul>
 
   <script type="module" src="./dist-web/storage/account-browser.js"></script>
+</body>
 </html>
