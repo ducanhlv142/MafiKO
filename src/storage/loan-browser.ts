@@ -21,6 +21,9 @@ import {
 import { openDatabase } from "./database.js";
 import { createBackup } from "./backup.js";
 import { saveLoan } from "./loan-storage.js";
+import {
+    populateCurrencySelect,
+} from "../presentation/shared/currency-select.js";
 
 const form =
     document.querySelector<HTMLFormElement>("#loan-form")!;
@@ -110,6 +113,8 @@ function parseRateBps(value: string): number {
 
 async function start() {
     const db = await openDatabase();
+
+    populateCurrencySelect(currencySelect);
 
     let accounts: Account[] = [];
     let writing = false;

@@ -1,7 +1,7 @@
 import type { Account } from "./account";
 import type { Transaction } from "./transaction";
 import type { ExpenseCategoryId } from "./category";
-
+import { isValidCurrency } from "./currency.js";
 import { categories } from "./category.js";
 
 export interface Budget {
@@ -44,7 +44,7 @@ export function isValidBudget(value: unknown): value is Budget {
     return (
         typeof b.month === "string" &&
         /^\d{4}-(0[1-9]|1[0-2])$/.test(b.month) &&
-        (b.currency === "VND" || b.currency === "JPY") &&
+        isValidCurrency(b.currency) &&
         Object.hasOwn(categories.expense, b.categoryId) &&
         Number.isSafeInteger(b.limitMinor) &&
         b.limitMinor > 0 &&

@@ -2,6 +2,8 @@ import type { FinanceBackup } from "./backup";
 import { categories } from "../domain/finance/category.js";
 import { isValidBudget } from "../domain/finance/budget.js";
 import { FINANCE_STORES } from "./backup.js";
+import { isValidCurrency } from
+    "../domain/finance/currency.js";
 import type {
     SavingsPlan,
     SavingsMovement,
@@ -122,7 +124,7 @@ export function parseBackup(text: string): FinanceBackup {
     for (const a of data.accounts) {
         if (typeof a.name !== "string" || !a.name.trim() ||
             !["cash", "bank", "e_wallet", "credit_card"].includes(a.kind) ||
-            !["VND", "JPY"].includes(a.currency) ||
+            !isValidCurrency(a.currency) ||
             !Number.isSafeInteger(a.openingBalanceMinor) || !validDate(a.openingBalanceDate)) {
             throw new Error(`Tài khoản ${a.id} có dữ liệu không hợp lệ.`);
         }

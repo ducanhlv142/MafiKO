@@ -1,4 +1,5 @@
 import type { Account } from "./account";
+import { isValidCurrency } from "./currency.js";
 
 export type SavingsKind =
     | "flexible"
@@ -126,10 +127,7 @@ export function isValidSavingsPlan(
             plan.kind === "fixed"
         ) &&
 
-        (
-            plan.currency === "VND" ||
-            plan.currency === "JPY"
-        ) &&
+        isValidCurrency(plan.currency) &&
 
         validMoney(plan.initialMinor) &&
         plan.initialMinor > 0 &&

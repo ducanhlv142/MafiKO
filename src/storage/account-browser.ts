@@ -12,6 +12,13 @@ import { createExcelWorkbook } from "./export-excel.js";
 import { prepareExcelImport } from "./import-excel.js";
 import { commitExcelImport } from "./commit-excel.js";
 import type { ExcelImportRow } from "./import-excel";
+import {
+  populateCurrencySelect,
+} from "../presentation/shared/currency-select.js";
+
+import {
+  isValidCurrency,
+} from "../domain/finance/currency.js";
 
 const form = document.querySelector<HTMLFormElement>("#account-form")!;
 const dateInput = document.querySelector<HTMLInputElement>("#opening-date")!;
@@ -49,6 +56,15 @@ function showAccounts(db: IDBDatabase) {
 
 async function start() {
   const db = await openDatabase();
+  const currencySelect =
+    form.querySelector<HTMLSelectElement>(
+      'select[name="currency"]'
+    )!;
+
+  populateCurrencySelect(
+    currencySelect,
+    "VND"
+  );
   const exportButton = document.querySelector<HTMLButtonElement>("#export-backup")!;
   const backupStatus = document.querySelector<HTMLElement>("#backup-status")!;
 
@@ -626,6 +642,14 @@ async function start() {
     const data = new FormData(form);
     const name = String(data.get("name") ?? "").trim();
     const balance = Number(data.get("balance"));
+    const currency = data.get("currency");
+
+    if (!isValidCurrency(currency)) {
+      status.textContent =
+        "Tiền tệ không được hỗ trợ.";
+
+      return;
+    }
 
     if (!name || !Number.isSafeInteger(balance)) {
       status.textContent = "Nhập tên tài khoản và số dư nguyên hợp lệ.";
@@ -636,7 +660,7 @@ async function start() {
       id: crypto.randomUUID(),
       name,
       kind: data.get("kind") as Account["kind"],
-      currency: data.get("currency") as Account["currency"],
+      currency,
       openingBalanceMinor: balance,
       openingBalanceDate: dateInput.value,
     };

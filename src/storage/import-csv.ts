@@ -1,7 +1,8 @@
 import type { Account } from "../domain/finance/account";
 import type { Transaction } from "../domain/finance/transaction";
 import type { Transfer } from "../domain/finance/transfer";
-
+import { isValidCurrency } from
+    "../domain/finance/currency.js";
 import { categories } from "../domain/finance/category.js";
 import { createTransfer } from "../domain/finance/transfer.js";
 import { parseCsv } from "./parse-csv.js";
@@ -121,7 +122,7 @@ export function prepareCsvImport(
                 throw new Error("Số tiền phải là số nguyên dương.");
             }
 
-            if (currency !== "VND" && currency !== "JPY") {
+            if (!isValidCurrency(currency)) {
                 throw new Error("Tiền tệ không được hỗ trợ.");
             }
 

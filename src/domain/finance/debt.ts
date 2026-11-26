@@ -1,5 +1,5 @@
 import type { Account } from "./account";
-
+import { isValidCurrency } from "./currency.js";
 export type LoanDirection = "borrowed" | "lent";
 
 export interface Loan {
@@ -92,8 +92,7 @@ export function isValidLoan(value: unknown): value is Loan {
         (loan.direction === "borrowed" ||
             loan.direction === "lent") &&
 
-        (loan.currency === "VND" ||
-            loan.currency === "JPY") &&
+        isValidCurrency(loan.currency) &&
 
         validMoney(loan.principalMinor) &&
         loan.principalMinor > 0 &&

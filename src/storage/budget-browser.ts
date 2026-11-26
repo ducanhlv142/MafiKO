@@ -10,7 +10,9 @@ import { openDatabase } from "./database.js";
 import { createBackup } from "./backup.js";
 import type { Budget } from "../domain/finance/budget";
 import type { ExpenseCategoryId } from "../domain/finance/category";
-
+import {
+    populateCurrencySelect,
+} from "../presentation/shared/currency-select.js";
 import {
     saveBudget,
     deleteBudget,
@@ -67,6 +69,8 @@ const statusLabels = {
 
 async function start() {
     const db = await openDatabase();
+
+    populateCurrencySelect(currencySelect);
 
     monthInput.value = currentMonth();
 
