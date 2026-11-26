@@ -11,6 +11,7 @@ export const categories = {
         salary: "Lương",
         bonus: "Thưởng",
         loanIncome: "Lãi và phí cho vay",
+        savingsInterest: "Lãi tiết kiệm",
         otherIncome: "Thu khác",
     },
 } as const;

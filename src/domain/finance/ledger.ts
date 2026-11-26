@@ -16,12 +16,26 @@ import {
     paymentCashMovement,
     summarizeLoan,
 } from "./debt.js";
+import type {
+    SavingsPlan,
+    SavingsMovement,
+} from "./savings";
+
+import {
+    savingsCashMovement,
+    savingsMovementCash,
+    savingsNetValue,
+} from "./savings.js";
 
 export interface FinancialLedger {
     transactions: readonly Transaction[];
     transfers: readonly Transfer[];
+
     loans: readonly Loan[];
     loanPayments: readonly LoanPayment[];
+
+    savingsPlans: readonly SavingsPlan[];
+    savingsMovements: readonly SavingsMovement[];
 }
 
 export function getAccountBalance(
@@ -65,6 +79,42 @@ export function getAccountBalance(
             paymentCashMovement(
                 loan,
                 payment,
+                account.id
+            )
+        );
+    }
+
+    const savingsMap = new Map(
+        ledger.savingsPlans.map(
+            plan => [plan.id, plan]
+        )
+    );
+
+    for (const plan of ledger.savingsPlans) {
+        changes.push(
+            savingsCashMovement(
+                plan,
+                account.id
+            )
+        );
+    }
+
+    for (const movement of ledger.savingsMovements) {
+
+        const plan = savingsMap.get(
+            movement.savingsId
+        );
+
+        if (!plan) {
+            throw new Error(
+                "Biến động không có sổ tiết kiệm."
+            );
+        }
+
+        changes.push(
+            savingsMovementCash(
+                plan,
+                movement,
                 account.id
             )
         );
@@ -124,6 +174,51 @@ export function getReportTransactions(
         });
     }
 
+    const savingsMap = new Map(
+        ledger.savingsPlans.map(
+            plan => [plan.id, plan]
+        )
+    );
+
+    for (const movement of ledger.savingsMovements) {
+
+        const plan = savingsMap.get(
+            movement.savingsId
+        );
+
+        if (!plan) {
+            throw new Error(
+                "Không tìm thấy sổ tiết kiệm."
+            );
+        }
+
+        if (
+            movement.kind !== "interestCash" &&
+            movement.kind !== "interestCapitalized"
+        ) {
+            continue;
+        }
+
+        result.push({
+            id: `savings-report:${movement.id}`,
+
+            accountId: movement.accountId,
+
+            kind: "income",
+
+            categoryId: "savingsInterest",
+
+            amountMinor: movement.amountMinor,
+
+            date: movement.date,
+
+            note:
+                movement.kind === "interestCash"
+                    ? `Lãi tiết kiệm · ${plan.name}`
+                    : `Lãi nhập gốc · ${plan.name}`,
+        });
+    }
+
     return result;
 }
 
@@ -139,4 +234,15 @@ export function getLoanNetValue(
     return loan.direction === "borrowed"
         ? -summary.remainingPrincipalMinor
         : summary.remainingPrincipalMinor;
+}
+
+export function getSavingsNetValue(
+    plan: SavingsPlan,
+    movements: readonly SavingsMovement[]
+): number {
+
+    return savingsNetValue(
+        plan,
+        movements
+    );
 }

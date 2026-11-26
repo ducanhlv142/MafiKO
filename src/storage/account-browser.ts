@@ -76,8 +76,10 @@ async function start() {
         `${backup.transactions.length} giao dịch, ` +
         `${backup.transfers.length} lần chuyển, ` +
         `${backup.budgets.length} ngân sách, ` +
-        `${backup.loans.length} khoản vay và ` +
-        `${backup.loanPayments.length} lần thanh toán.`;
+        `${backup.loans.length} khoản vay, ` +
+        `${backup.loanPayments.length} lần thanh toán, ` +
+        `${backup.savingsPlans.length} sổ tiết kiệm và ` +
+        `${backup.savingsMovements.length} biến động tiết kiệm.`;
     } catch (error) {
       backupStatus.textContent =
         error instanceof Error ? error.message : "Tạo bản sao lưu thất bại.";
@@ -564,7 +566,9 @@ async function start() {
         `${backup.transfers.length} lần chuyển · ` +
         `${backup.budgets.length} ngân sách · ` +
         `${backup.loans.length} khoản vay · ` +
-        `${backup.loanPayments.length} lần thanh toán.`;
+        `${backup.loanPayments.length} lần thanh toán · ` +
+        `${backup.savingsPlans.length} sổ tiết kiệm · ` +
+        `${backup.savingsMovements.length} biến động tiết kiệm.`;
       restoreButton.disabled = false;
     } catch (error) {
       if (backupFile.files?.[0] !== file) return;
@@ -586,7 +590,9 @@ async function start() {
       `${backup.transfers.length} lần chuyển\n` +
       `${backup.budgets.length} ngân sách\n` +
       `${backup.loans.length} khoản vay\n` +
-      `${backup.loanPayments.length} lần thanh toán\n\n` +
+      `${backup.loanPayments.length} lần thanh toán\n` +
+      `${backup.savingsPlans.length} sổ tiết kiệm\n` +
+      `${backup.savingsMovements.length} biến động tiết kiệm\n\n` +
 
       "Toàn bộ dữ liệu hiện tại sẽ bị thay thế."
     );

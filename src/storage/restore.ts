@@ -2,6 +2,16 @@ import type { FinanceBackup } from "./backup";
 import { categories } from "../domain/finance/category.js";
 import { isValidBudget } from "../domain/finance/budget.js";
 import { FINANCE_STORES } from "./backup.js";
+import type {
+    SavingsPlan,
+    SavingsMovement,
+} from "../domain/finance/savings";
+
+import {
+    isValidSavingsPlan,
+    isValidSavingsMovement,
+    summarizeSavings,
+} from "../domain/finance/savings.js";
 
 import type {
     Loan,
@@ -39,7 +49,7 @@ function checkIds(rows: unknown[], label: string) {
 export function parseBackup(text: string): FinanceBackup {
     const data = JSON.parse(text);
 
-    if (data?.app !== "MafiKO" || ![1, 2, 3].includes(data.formatVersion) ||
+    if (data?.app !== "MafiKO" || ![1, 2, 3, 4].includes(data.formatVersion) ||
         typeof data.exportedAt !== "string" || !Number.isFinite(Date.parse(data.exportedAt)) ||
         !Array.isArray(data.accounts) || !Array.isArray(data.transactions) ||
         !Array.isArray(data.transfers)) {
@@ -54,6 +64,30 @@ export function parseBackup(text: string): FinanceBackup {
         data.loans = [];
         data.loanPayments = [];
     }
+
+    if (data.formatVersion < 4) {
+        data.savingsPlans = [];
+        data.savingsMovements = [];
+    }
+
+    if (
+        !Array.isArray(data.savingsPlans) ||
+        !Array.isArray(data.savingsMovements)
+    ) {
+        throw new Error(
+            "Danh sách tiết kiệm không hợp lệ."
+        );
+    }
+
+    checkIds(
+        data.savingsPlans,
+        "Sổ tiết kiệm"
+    );
+
+    checkIds(
+        data.savingsMovements,
+        "Biến động tiết kiệm"
+    );
 
     if (
         !Array.isArray(data.loans) ||
@@ -186,9 +220,87 @@ export function parseBackup(text: string): FinanceBackup {
         );
     }
 
+    const savingsPlans =
+        new Map<string, SavingsPlan>();
+
+    for (const plan of data.savingsPlans) {
+
+        if (!isValidSavingsPlan(plan)) {
+            throw new Error(
+                "Bản sao chứa sổ tiết kiệm không hợp lệ."
+            );
+        }
+
+        const account = accounts.get(
+            plan.accountId
+        );
+
+        if (
+            !account ||
+            account.currency !== plan.currency ||
+            plan.startDate < account.start
+        ) {
+            throw new Error(
+                `Sổ tiết kiệm ${plan.id} có tài khoản không hợp lệ.`
+            );
+        }
+
+        savingsPlans.set(plan.id, plan);
+    }
+
+    const movementsBySavings =
+        new Map<string, SavingsMovement[]>();
+
+    for (const movement of data.savingsMovements) {
+
+        if (!isValidSavingsMovement(movement)) {
+            throw new Error(
+                "Bản sao chứa biến động tiết kiệm không hợp lệ."
+            );
+        }
+
+        const plan = savingsPlans.get(
+            movement.savingsId
+        );
+
+        const account = accounts.get(
+            movement.accountId
+        );
+
+        if (
+            !plan ||
+            !account ||
+            account.currency !== plan.currency ||
+            movement.date < plan.startDate ||
+            movement.date < account.start
+        ) {
+            throw new Error(
+                `Biến động tiết kiệm ${movement.id} không hợp lệ.`
+            );
+        }
+
+        const history =
+            movementsBySavings.get(plan.id) ?? [];
+
+        history.push(movement);
+
+        movementsBySavings.set(
+            plan.id,
+            history
+        );
+    }
+
+    for (const plan of savingsPlans.values()) {
+
+        summarizeSavings(
+            plan,
+            movementsBySavings.get(plan.id) ?? []
+        );
+    }
+
     return {
         ...data,
-        formatVersion: 3,
+        formatVersion: 4,
     };
 }
 

@@ -8,6 +8,7 @@ import {
     getAccountBalance,
     getReportTransactions,
     getLoanNetValue,
+    getSavingsNetValue,
 } from "../domain/finance/ledger.js";
 import {
     summarizeLoan,
@@ -239,6 +240,37 @@ export async function createExcelWorkbook(
         currencyTotals.set(
             loan.currency,
             (currencyTotals.get(loan.currency) ?? 0) + net
+        );
+    }
+
+    for (const plan of backup.savingsPlans) {
+
+        const net = getSavingsNetValue(
+            plan,
+            backup.savingsMovements
+        );
+
+        const label = plan.kind === "fixed"
+            ? "Tiền gửi có kỳ hạn"
+            : "Tiết kiệm linh hoạt";
+
+        overviewSheet.addRow({
+            account: plan.name,
+
+            kind: label,
+
+            currency: plan.currency,
+
+            balance: net,
+
+            net,
+        });
+
+        currencyTotals.set(
+            plan.currency,
+
+            (currencyTotals.get(plan.currency) ?? 0) +
+            net
         );
     }
 

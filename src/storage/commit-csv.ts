@@ -51,13 +51,20 @@ export function commitCsvImport(
 
         const loanPaymentRequest =
             tx.objectStore("loanPayments").getAll();
+        const savingsPlanRequest =
+            tx.objectStore("savingsPlans").getAll();
+
+        const savingsMovementRequest =
+            tx.objectStore("savingsMovements").getAll();
         const transferRequest = transfers.getAll();
 
         transferRequest.onsuccess = () => {
             try {
                 const backup: FinanceBackup = {
                     app: "MafiKO",
-                    formatVersion: 3,
+                    formatVersion: 4,
+                    savingsPlans: savingsPlanRequest.result,
+                    savingsMovements: savingsMovementRequest.result,
                     loans: loanRequest.result,
                     loanPayments: loanPaymentRequest.result,
                     budgets: budgetRequest.result,

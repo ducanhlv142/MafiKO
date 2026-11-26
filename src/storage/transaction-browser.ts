@@ -13,6 +13,10 @@ import { deleteTransfer } from "./delete-transfer.js";
 import { updateTransaction } from "./update-transaction.js";
 import { updateTransfer } from "./update-transfer.js";
 import { createBackup } from "./backup.js";
+import {
+    savingsCashMovement,
+    savingsMovementCash,
+} from "../domain/finance/savings.js";
 
 import {
     getAccountBalance,
@@ -594,6 +598,83 @@ async function start() {
                     `Gốc: ${money(payment.principalMinor)} · ` +
                     `Lãi: ${money(payment.interestMinor)} · ` +
                     `Phí: ${money(payment.feeMinor)}`,
+            });
+        }
+
+        const savingsMap = new Map(
+            backup.savingsPlans.map(
+                plan => [plan.id, plan]
+            )
+        );
+
+        for (const plan of backup.savingsPlans) {
+
+            if (plan.accountId !== account.id) {
+                continue;
+            }
+
+            const movement = savingsCashMovement(
+                plan,
+                account.id
+            );
+
+            rows.push({
+                date: plan.startDate,
+
+                text:
+                    `Mở sổ tiết kiệm · ` +
+                    `${money(movement)} · ` +
+                    plan.name,
+            });
+        }
+
+        const savingsLabels = {
+            deposit: "Gửi thêm tiết kiệm",
+            withdrawal: "Rút tiền tiết kiệm",
+            interestCash: "Nhận lãi tiết kiệm",
+            interestCapitalized: "Nhập lãi vào sổ",
+        };
+
+        for (const movement of backup.savingsMovements) {
+
+            if (movement.accountId !== account.id) {
+                continue;
+            }
+
+            const plan = savingsMap.get(
+                movement.savingsId
+            );
+
+            if (!plan) {
+                throw new Error(
+                    "Không tìm thấy sổ tiết kiệm."
+                );
+            }
+
+            const cash = savingsMovementCash(
+                plan,
+                movement,
+                account.id
+            );
+
+            const label = savingsLabels[movement.kind];
+
+            const detail =
+                movement.kind === "interestCapitalized"
+                    ? `${money(movement.amountMinor)} vào sổ (không đổi số dư ví)`
+                    : money(cash);
+
+            rows.push({
+                date: movement.date,
+
+                text:
+                    `${label} · ${detail} · ` +
+                    plan.name +
+                    (
+                        movement.note
+                            ? ` · ${movement.note}`
+                            : ""
+                    ),
             });
         }
 
