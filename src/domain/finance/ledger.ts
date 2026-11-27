@@ -1,6 +1,6 @@
 import type { Account } from "./account";
 import type { Transaction } from "./transaction";
-
+import type { LedgerEvent } from "./ledger-posting";
 import type {
     Loan,
     LoanPayment,
@@ -71,7 +71,14 @@ export function getReportTransactions(
     ledger: FinancialLedger
 ): Transaction[] {
 
-    const events = projectLedger(ledger);
+    return getReportTransactionsFromEvents(
+        projectLedger(ledger)
+    );
+}
+
+export function getReportTransactionsFromEvents(
+    events: readonly LedgerEvent[]
+): Transaction[] {
 
     const result: Transaction[] = [];
 

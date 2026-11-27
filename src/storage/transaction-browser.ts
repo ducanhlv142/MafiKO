@@ -11,10 +11,8 @@ import {
     savingsCashMovement,
     savingsMovementCash,
 } from "../domain/finance/savings.js";
-import {
-    getAccountBalance,
-    getReportTransactions,
-} from "../domain/finance/ledger.js";
+import { createLedgerView } from
+    "../domain/finance/ledger-view.js";
 import {
     loanCashMovement,
     paymentCashMovement,
@@ -522,16 +520,20 @@ async function start() {
                 t.toAccountId === account.id
         );
 
-        const reportEntries = getReportTransactions(backup);
+        const ledgerView =
+            createLedgerView(backup);
+
+        const reportEntries =
+            ledgerView.getReportTransactions();
 
         renderReport(reportEntries, account);
 
         const isCard = account.kind === "credit_card";
 
-        const current = getAccountBalance(
-            account,
-            backup
-        );
+        const current =
+            ledgerView.getAccountBalance(
+                account.id
+            );
 
         const money = (n: number) => `${n.toLocaleString("vi-VN")} ${account.currency}`;
 

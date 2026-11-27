@@ -1,5 +1,6 @@
 import type { Account } from "../domain/finance/account";
-import { getReportTransactions } from "../domain/finance/ledger.js";
+import { createLedgerView } from
+    "../domain/finance/ledger-view.js";
 import { categories } from "../domain/finance/category.js";
 import {
     summarizeBudget,
@@ -137,8 +138,11 @@ async function start() {
 
         if (version !== refreshVersion) return;
 
+        const ledgerView =
+            createLedgerView(backup);
+
         const reportTransactions =
-            getReportTransactions(backup);
+            ledgerView.getReportTransactions();
 
         const budgets = backup.budgets.filter(
             b => b.month === month &&

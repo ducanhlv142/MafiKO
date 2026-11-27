@@ -24,6 +24,7 @@ export const domainErrorMessages = {
     RECORD_NOT_FOUND: "Không tìm thấy bản ghi.",
     RECORD_CONFLICT: "Dữ liệu đã thay đổi.",
     UNBALANCED_LEDGER_EVENT: "Bút toán tài chính không cân bằng.",
+    LEDGER_POSITION_MISMATCH: "Giá trị Ledger không khớp với dữ liệu nghiệp vụ.",
 } as const;
 
 export type DomainErrorCode =

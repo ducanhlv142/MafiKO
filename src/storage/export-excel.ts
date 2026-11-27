@@ -4,12 +4,8 @@ import { calculateBalance } from "../domain/finance/balance.js";
 import { toMovement } from "../domain/finance/transaction.js";
 import { transferMovement } from "../domain/finance/transfer.js";
 import { summarizeBudget } from "../domain/finance/budget.js";
-import {
-    getAccountBalance,
-    getReportTransactions,
-    getLoanNetValue,
-    getSavingsNetValue,
-} from "../domain/finance/ledger.js";
+import { buildFinanceOverview } from
+    "../domain/finance/finance-overview.js";
 import {
     summarizeLoan,
     paymentTotal,
@@ -87,8 +83,11 @@ export async function createExcelWorkbook(
         backup.accounts.map(a => [a.id, a])
     );
 
+    const overview =
+        buildFinanceOverview(backup);
+
     const reportTransactions =
-        getReportTransactions(backup);
+        overview.reportTransactions;
 
     const transactionsSheet = workbook.addWorksheet("Transactions");
 
@@ -193,97 +192,54 @@ export async function createExcelWorkbook(
         { header: "Giá trị ròng", key: "net", width: 24 },
     ];
 
-    const currencyTotals = new Map<string, number>();
+    for (const position of overview.positions) {
 
-    for (const account of backup.accounts) {
-        const isCard = account.kind === "credit_card";
+        const name =
+            position.kind === "loan"
+                ? position.record.counterparty
+                : position.record.name;
 
-        const balance = getAccountBalance(
-            account,
-            backup
-        );
-
-        const net = isCard ? -balance : balance;
-
-        overviewSheet.addRow({
-            account: account.name,
-            kind: accountKinds[account.kind],
-            currency: account.currency,
-            balance,
-            net,
-        });
-
-        currencyTotals.set(
-            account.currency,
-            (currencyTotals.get(account.currency) ?? 0) + net
-        );
-    }
-
-    for (const loan of backup.loans) {
-        const net = getLoanNetValue(
-            loan,
-            backup.loanPayments
-        );
-
-        const label = loan.direction === "borrowed"
-            ? "Nợ phải trả"
-            : "Khoản phải thu";
+        const label =
+            position.kind === "account"
+                ? accountKinds[position.record.kind]
+                : position.kind === "loan"
+                    ? position.record.direction === "borrowed"
+                        ? "Nợ phải trả"
+                        : "Khoản phải thu"
+                    : position.record.kind === "fixed"
+                        ? "Tiền gửi có kỳ hạn"
+                        : "Tiết kiệm linh hoạt";
 
         overviewSheet.addRow({
-            account: loan.counterparty,
-            kind: label,
-            currency: loan.currency,
-            balance: Math.abs(net),
-            net,
-        });
 
-        currencyTotals.set(
-            loan.currency,
-            (currencyTotals.get(loan.currency) ?? 0) + net
-        );
-    }
-
-    for (const plan of backup.savingsPlans) {
-
-        const net = getSavingsNetValue(
-            plan,
-            backup.savingsMovements
-        );
-
-        const label = plan.kind === "fixed"
-            ? "Tiền gửi có kỳ hạn"
-            : "Tiết kiệm linh hoạt";
-
-        overviewSheet.addRow({
-            account: plan.name,
+            account: name,
 
             kind: label,
 
-            currency: plan.currency,
+            currency: position.currency,
 
-            balance: net,
+            balance: position.balanceMinor,
 
-            net,
+            net: position.netMinor,
         });
-
-        currencyTotals.set(
-            plan.currency,
-
-            (currencyTotals.get(plan.currency) ?? 0) +
-            net
-        );
     }
 
     overviewSheet.addRow([]);
 
-    for (const [currency, total] of currencyTotals) {
+    for (const total of overview.currencyTotals) {
+
         const row = overviewSheet.addRow({
+
             account: "TỔNG GIÁ TRỊ RÒNG",
-            currency,
-            net: total,
+
+            currency: total.currency,
+
+            net: total.netWorthMinor,
         });
 
-        row.font = { bold: true };
+        row.font = {
+            bold: true,
+        };
     }
 
     overviewSheet.getColumn("balance").numFmt = "#,##0";
