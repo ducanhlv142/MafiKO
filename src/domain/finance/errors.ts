@@ -25,6 +25,12 @@ export const domainErrorMessages = {
     RECORD_CONFLICT: "Dữ liệu đã thay đổi.",
     UNBALANCED_LEDGER_EVENT: "Bút toán tài chính không cân bằng.",
     LEDGER_POSITION_MISMATCH: "Giá trị Ledger không khớp với dữ liệu nghiệp vụ.",
+    INVALID_CATEGORY: "Danh mục không hợp lệ.",
+
+    CATEGORY_NOT_FOUND: "Không tìm thấy danh mục.",
+    CATEGORY_CONFLICT: "Danh mục bị trùng ID hoặc tên.",
+    CATEGORY_ARCHIVED: "Danh mục đã ngừng sử dụng.",
+    CATEGORY_PROTECTED: "Không thể thay đổi thuộc tính được bảo vệ của danh mục hệ thống.",
 } as const;
 
 export type DomainErrorCode =
