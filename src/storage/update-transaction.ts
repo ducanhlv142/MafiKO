@@ -1,12 +1,13 @@
 import type { Transaction } from "../domain/finance/transaction";
 import type { Account } from "../domain/finance/account";
-
 import { categories } from "../domain/finance/category.js";
+import type {
+    TransactionChanges,
+} from "../application/commands/finance-mutation";
 
-export type TransactionChanges = Pick<
-    Transaction,
-    "kind" | "amountMinor" | "date" | "note" | "categoryId"
->;
+export type {
+    TransactionChanges,
+} from "../application/commands/finance-mutation";
 
 export function updateTransaction(
     db: IDBDatabase,

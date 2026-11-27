@@ -15,10 +15,16 @@ import type { ExcelImportRow } from "./import-excel";
 import {
   populateCurrencySelect,
 } from "../presentation/shared/currency-select.js";
-
+import { isValidAccount } from
+  "../domain/finance/account.js";
 import {
   isValidCurrency,
 } from "../domain/finance/currency.js";
+import { FinanceService } from
+  "../application/services/finance-service.js";
+
+import { IndexedDbFinanceRepository } from
+  "../infrastructure/indexeddb/finance-repository.js";
 
 const form = document.querySelector<HTMLFormElement>("#account-form")!;
 const dateInput = document.querySelector<HTMLInputElement>("#opening-date")!;
@@ -56,6 +62,9 @@ function showAccounts(db: IDBDatabase) {
 
 async function start() {
   const db = await openDatabase();
+  const finance = new FinanceService(
+    new IndexedDbFinanceRepository(db)
+  );
   const currencySelect =
     form.querySelector<HTMLSelectElement>(
       'select[name="currency"]'
@@ -635,7 +644,7 @@ async function start() {
   showAccounts(db);
   saveButton.disabled = false;
 
-  form.onsubmit = (event) => {
+  form.onsubmit = async (event) => {
     event.preventDefault();
     if (saveButton.disabled) return;
 
@@ -664,23 +673,43 @@ async function start() {
       openingBalanceMinor: balance,
       openingBalanceDate: dateInput.value,
     };
+    if (!isValidAccount(account)) {
+
+      status.textContent =
+        "Thông tin tài khoản không hợp lệ.";
+
+      return;
+    }
 
     saveButton.disabled = true;
-    const tx = db.transaction("accounts", "readwrite");
-    tx.objectStore("accounts").add(account);
 
-    tx.oncomplete = () => {
+    try {
+
+      await finance.createAccount(
+        account,
+        today()
+      );
+
       form.reset();
-      dateInput.value = today();
-      saveButton.disabled = false;
-      status.textContent = `Đã thêm ${account.name}.`;
-      showAccounts(db);
-    };
 
-    tx.onabort = () => {
+      dateInput.value = today();
+
+      status.textContent =
+        `Đã thêm ${account.name}.`;
+
+      showAccounts(db);
+
+    } catch (error) {
+
+      status.textContent =
+        error instanceof Error
+          ? error.message
+          : "Lưu tài khoản thất bại.";
+
+    } finally {
+
       saveButton.disabled = false;
-      status.textContent = "Lưu thất bại. Dữ liệu vừa nhập vẫn còn trong form.";
-    };
+    }
   };
 }
 

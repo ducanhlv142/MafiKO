@@ -1,36 +1,92 @@
-import { categories } from "../domain/finance/category.js";
-import type { Transaction } from "../domain/finance/transaction";
+import { categories } from
+    "../domain/finance/category.js";
+
+import type { Transaction } from
+    "../domain/finance/transaction";
+
+import { DomainError } from
+    "../domain/finance/errors.js";
 
 export function changeCategory(
     db: IDBDatabase,
-    transactionId: string,
-    categoryId: NonNullable<Transaction["categoryId"]>,
+    expected: Transaction,
+    categoryId: NonNullable<
+        Transaction["categoryId"]
+    >
 ): Promise<void> {
+
     return new Promise((resolve, reject) => {
-        const tx = db.transaction("transactions", "readwrite");
-        const store = tx.objectStore("transactions");
-        const request = store.get(transactionId);
-        let reason = "Không lưu được danh mục.";
 
-        request.onsuccess = () => {
-            const entry: Transaction | undefined = request.result;
+        const tx = db.transaction(
+            "transactions",
+            "readwrite"
+        );
 
-            if (!entry) {
-                reason = "Giao dịch này không còn trong sổ.";
-                tx.abort();
-                return;
-            }
+        const store =
+            tx.objectStore("transactions");
 
-            if (!Object.hasOwn(categories[entry.kind], categoryId)) {
-                reason = "Danh mục không phù hợp với loại thu/chi.";
-                tx.abort();
-                return;
-            }
+        const request =
+            store.get(expected.id);
 
-            store.put({ ...entry, categoryId });
-        };
+        let failure: unknown;
 
         tx.oncomplete = () => resolve();
-        tx.onabort = () => reject(tx.error ?? new Error(reason));
+
+        tx.onabort = () => {
+
+            reject(
+                failure ??
+                tx.error ??
+                new Error(
+                    "Không lưu được danh mục."
+                )
+            );
+        };
+
+        request.onsuccess = () => {
+
+            try {
+
+                const entry: Transaction | undefined =
+                    request.result;
+
+                if (!entry) {
+                    throw new DomainError(
+                        "RECORD_NOT_FOUND"
+                    );
+                }
+
+                if (
+                    JSON.stringify(entry) !==
+                    JSON.stringify(expected)
+                ) {
+                    throw new DomainError(
+                        "RECORD_CONFLICT"
+                    );
+                }
+
+                if (
+                    !Object.hasOwn(
+                        categories[entry.kind],
+                        categoryId
+                    )
+                ) {
+                    throw new DomainError(
+                        "INVALID_TRANSACTION"
+                    );
+                }
+
+                store.put({
+                    ...entry,
+                    categoryId,
+                });
+
+            } catch (error) {
+
+                failure = error;
+
+                tx.abort();
+            }
+        };
     });
 }

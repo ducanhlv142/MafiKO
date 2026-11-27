@@ -4,7 +4,6 @@ import type {
     LoanPayment,
     LoanDirection,
 } from "../domain/finance/debt";
-import { mutateDebt } from "./debt-mutation.js";
 import {
     createLoan,
     createLoanPayment,
@@ -12,18 +11,19 @@ import {
     summarizeLoan,
 } from "../domain/finance/debt.js";
 import {
-    saveLoanPayment,
-} from "./loan-payment-storage.js";
-import {
     estimateLoanInterest,
     getLoanMaturity,
 } from "../domain/finance/loan-interest.js";
 import { openDatabase } from "./database.js";
 import { createBackup } from "./backup.js";
-import { saveLoan } from "./loan-storage.js";
 import {
     populateCurrencySelect,
 } from "../presentation/shared/currency-select.js";
+import { FinanceService } from
+    "../application/services/finance-service.js";
+
+import { IndexedDbFinanceRepository } from
+    "../infrastructure/indexeddb/finance-repository.js";
 
 const form =
     document.querySelector<HTMLFormElement>("#loan-form")!;
@@ -113,6 +113,10 @@ function parseRateBps(value: string): number {
 
 async function start() {
     const db = await openDatabase();
+
+    const finance = new FinanceService(
+        new IndexedDbFinanceRepository(db)
+    );
 
     populateCurrencySelect(currencySelect);
 
@@ -493,8 +497,7 @@ async function start() {
                 currencySelect.disabled = true;
 
                 try {
-                    await mutateDebt(
-                        db,
+                    await finance.mutateDebt(
                         loan,
                         {
                             kind: "deletePayment",
@@ -854,8 +857,7 @@ async function start() {
                 currencySelect.disabled = true;
 
                 try {
-                    await mutateDebt(
-                        db,
+                    await finance.mutateDebt(
                         loan,
                         { kind: "deleteLoan" },
                         today()
@@ -994,8 +996,7 @@ async function start() {
                 "Đang lưu thanh toán...";
 
             if (original) {
-                await mutateDebt(
-                    db,
+                await finance.mutateDebt(
                     loan,
                     {
                         kind: "updatePayment",
@@ -1005,8 +1006,7 @@ async function start() {
                     today()
                 );
             } else {
-                await saveLoanPayment(
-                    db,
+                await finance.saveLoanPayment(
                     payment,
                     loan,
                     today()
@@ -1120,8 +1120,7 @@ async function start() {
             currencySelect.disabled = true;
 
             if (original) {
-                await mutateDebt(
-                    db,
+                await finance.mutateDebt(
                     original,
                     {
                         kind: "updateLoan",
@@ -1130,7 +1129,7 @@ async function start() {
                     today()
                 );
             } else {
-                await saveLoan(db, loan, today());
+                await finance.saveLoan(loan, today());
             }
 
             clearLoanEdit();

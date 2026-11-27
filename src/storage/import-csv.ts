@@ -6,6 +6,9 @@ import { isValidCurrency } from
 import { categories } from "../domain/finance/category.js";
 import { createTransfer } from "../domain/finance/transfer.js";
 import { parseCsv } from "./parse-csv.js";
+import {
+    isISODate as validDate,
+} from "../domain/finance/validation.js";
 
 export type ImportRow =
     | { rowNumber: number; type: "transaction"; data: Transaction }
@@ -29,17 +32,6 @@ const expectedHeader = [
     "Tiền tệ",
     "Nội dung",
 ];
-
-function validDate(value: string): boolean {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        return false;
-    }
-
-    const date = new Date(`${value}T00:00:00Z`);
-
-    return Number.isFinite(date.getTime()) &&
-        date.toISOString().slice(0, 10) === value;
-}
 
 function findAccount(
     accounts: Account[],

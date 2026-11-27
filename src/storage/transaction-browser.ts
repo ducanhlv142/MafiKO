@@ -7,26 +7,30 @@ import { createTransfer, transferMovement } from "../domain/finance/transfer.js"
 import type { Transfer } from "../domain/finance/transfer";
 import { categories } from "../domain/finance/category.js";
 import { summarizeMonth } from "../domain/finance/monthly-summary.js";
-import { changeCategory } from "./change-category.js";
-import { deleteTransaction } from "./delete-transaction.js";
-import { deleteTransfer } from "./delete-transfer.js";
-import { updateTransaction } from "./update-transaction.js";
-import { updateTransfer } from "./update-transfer.js";
 import { createBackup } from "./backup.js";
 import {
     savingsCashMovement,
     savingsMovementCash,
 } from "../domain/finance/savings.js";
-
 import {
     getAccountBalance,
     getReportTransactions,
 } from "../domain/finance/ledger.js";
-
 import {
     loanCashMovement,
     paymentCashMovement,
 } from "../domain/finance/debt.js";
+import { isValidTransaction } from
+    "../domain/finance/transaction.js";
+
+import { DomainError } from
+    "../domain/finance/errors.js";
+
+import { FinanceService } from
+    "../application/services/finance-service.js";
+
+import { IndexedDbFinanceRepository } from
+    "../infrastructure/indexeddb/finance-repository.js";
 
 const accountSelect = document.querySelector<HTMLSelectElement>("#account")!;
 const form = document.querySelector<HTMLFormElement>("#entry")!;
@@ -52,15 +56,6 @@ function read<T>(request: IDBRequest<T>): Promise<T> {
     });
 }
 
-function saveEntry(db: IDBDatabase, entry: Transaction): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction("transactions", "readwrite");
-        tx.oncomplete = () => resolve();
-        tx.onabort = () => reject(tx.error ?? new Error("Ghi giao dịch thất bại."));
-        tx.objectStore("transactions").add(entry);
-    });
-}
-
 function updateCategories() {
     const kind = kindSelect.value === "income" ? "income" : "expense";
     categorySelect.replaceChildren();
@@ -75,9 +70,10 @@ updateCategories();
 
 async function start() {
     const db = await openDatabase();
-    const accounts: Account[] = await read(
-        db.transaction("accounts").objectStore("accounts").getAll(),
+    const finance = new FinanceService(
+        new IndexedDbFinanceRepository(db)
     );
+    const accounts = await finance.listAccounts();
 
     for (const account of accounts) {
         accountSelect.add(new Option(`${account.name} · ${account.currency}`, account.id));
@@ -149,12 +145,10 @@ async function start() {
                 String(data.get("note") ?? "").trim(),
             );
 
-            await new Promise<void>((resolve, reject) => {
-                const tx = db.transaction("transfers", "readwrite");
-                tx.oncomplete = () => resolve();
-                tx.onabort = () => reject(tx.error ?? new Error("Lưu chuyển tiền thất bại."));
-                tx.objectStore("transfers").add(transfer);
-            });
+            await finance.createTransfer(
+                transfer,
+                today()
+            );
 
             transferForm.reset();
             transferDate.value = today();
@@ -314,8 +308,7 @@ async function start() {
         editStatus.textContent = "Đang lưu...";
 
         try {
-            await updateTransaction(
-                db,
+            await finance.updateTransaction(
                 editingEntry,
                 {
                     kind,
@@ -451,8 +444,7 @@ async function start() {
         editTransferStatus.textContent = "Đang lưu...";
 
         try {
-            await updateTransfer(
-                db,
+            await finance.updateTransfer(
                 editingTransfer,
                 {
                     amountMinor: Number(data.get("amount")),
@@ -704,7 +696,10 @@ async function start() {
                     select.disabled = true;
 
                     try {
-                        await changeCategory(db, entry.id, categoryId);
+                        await finance.changeCategory(
+                            entry,
+                            categoryId
+                        );
                     } catch (error) {
                         select.value = entry.categoryId ?? "";
                         select.disabled = false;
@@ -751,7 +746,7 @@ async function start() {
                     select.disabled = true;
 
                     try {
-                        await deleteTransaction(db, entry);
+                        await finance.deleteTransaction(entry);
 
                         status.textContent = "Đã xóa giao dịch.";
 
@@ -816,7 +811,7 @@ async function start() {
                     deleteButton.disabled = true;
 
                     try {
-                        await deleteTransfer(db, transfer);
+                        await finance.deleteTransfer(transfer);
 
                         status.textContent = "Đã xóa khoản chuyển tiền.";
 
@@ -880,14 +875,21 @@ async function start() {
 
         save.disabled = true;
         try {
-            await saveEntry(db, entry);
+            await finance.createTransaction(
+                entry,
+                selectedAccount().currency,
+                today()
+            );
             form.reset();
             updateCategories();
             dateInput.value = today();
             status.textContent = "Đã lưu giao dịch.";
             await refresh().catch(reportReadError);
-        } catch {
-            status.textContent = "Chưa lưu được. M thử lại nhé.";
+        } catch (error) {
+            status.textContent =
+                error instanceof Error
+                    ? error.message
+                    : "Chưa lưu được giao dịch.";
         } finally {
             save.disabled = false;
         }

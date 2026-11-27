@@ -1,9 +1,6 @@
 import type { FinanceBackup } from "./backup";
-import { categories } from "../domain/finance/category.js";
 import { isValidBudget } from "../domain/finance/budget.js";
 import { FINANCE_STORES } from "./backup.js";
-import { isValidCurrency } from
-    "../domain/finance/currency.js";
 import type {
     SavingsPlan,
     SavingsMovement,
@@ -25,16 +22,17 @@ import {
     isValidLoanPayment,
     summarizeLoan,
 } from "../domain/finance/debt.js";
+import { isValidAccount } from
+    "../domain/finance/account.js";
 
-function validDate(value: unknown): value is string {
-    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-    const date = new Date(`${value}T00:00:00Z`);
-    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
-}
+import { isValidTransaction } from
+    "../domain/finance/transaction.js";
 
-function validAmount(value: unknown): value is number {
-    return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
-}
+import { isValidTransfer } from
+    "../domain/finance/transfer.js";
+
+import { DomainError } from
+    "../domain/finance/errors.js";
 
 function checkIds(rows: unknown[], label: string) {
     const seen = new Set<string>();
@@ -119,42 +117,85 @@ export function parseBackup(text: string): FinanceBackup {
     checkIds(data.transactions, "Thu/chi");
     checkIds(data.transfers, "Chuyển tiền");
 
-    const accounts = new Map<string, { currency: string; start: string }>();
-
-    for (const a of data.accounts) {
-        if (typeof a.name !== "string" || !a.name.trim() ||
-            !["cash", "bank", "e_wallet", "credit_card"].includes(a.kind) ||
-            !isValidCurrency(a.currency) ||
-            !Number.isSafeInteger(a.openingBalanceMinor) || !validDate(a.openingBalanceDate)) {
-            throw new Error(`Tài khoản ${a.id} có dữ liệu không hợp lệ.`);
+    const accounts = new Map<
+        string,
+        {
+            currency: string;
+            start: string;
         }
-        accounts.set(a.id, { currency: a.currency, start: a.openingBalanceDate });
+    >();
+
+    for (const account of data.accounts) {
+
+        if (!isValidAccount(account)) {
+            throw new DomainError("INVALID_ACCOUNT");
+        }
+
+        accounts.set(account.id, {
+            currency: account.currency,
+            start: account.openingBalanceDate,
+        });
     }
 
-    for (const t of data.transactions) {
-        const account = accounts.get(t.accountId);
-        const kind = t.kind;
-        if (!account || (kind !== "expense" && kind !== "income") ||
-            !validAmount(t.amountMinor) || !validDate(t.date) ||
-            t.date < account.start || typeof t.note !== "string") {
-            throw new Error(`Giao dịch ${t.id} không hợp lệ.`);
+    for (const entry of data.transactions) {
+
+        if (!isValidTransaction(entry)) {
+            throw new DomainError(
+                "INVALID_TRANSACTION"
+            );
         }
 
-        const labels = kind === "expense" ? categories.expense : categories.income;
-        if (t.categoryId !== undefined &&
-            (typeof t.categoryId !== "string" || !Object.hasOwn(labels, t.categoryId))) {
-            throw new Error(`Giao dịch ${t.id} có danh mục sai.`);
+        const account = accounts.get(
+            entry.accountId
+        );
+
+        if (!account) {
+            throw new DomainError(
+                "ACCOUNT_NOT_FOUND"
+            );
+        }
+
+        if (entry.date < account.start) {
+            throw new DomainError("INVALID_DATE");
         }
     }
 
-    for (const t of data.transfers) {
-        const from = accounts.get(t.fromAccountId);
-        const to = accounts.get(t.toAccountId);
-        if (!from || !to || t.fromAccountId === t.toAccountId ||
-            from.currency !== t.currency || to.currency !== t.currency ||
-            !validAmount(t.amountMinor) || !validDate(t.date) ||
-            t.date < from.start || t.date < to.start || typeof t.note !== "string") {
-            throw new Error(`Khoản chuyển ${t.id} không hợp lệ.`);
+    for (const transfer of data.transfers) {
+
+        if (!isValidTransfer(transfer)) {
+            throw new DomainError(
+                "INVALID_TRANSFER"
+            );
+        }
+
+        const from = accounts.get(
+            transfer.fromAccountId
+        );
+
+        const to = accounts.get(
+            transfer.toAccountId
+        );
+
+        if (!from || !to) {
+            throw new DomainError(
+                "ACCOUNT_NOT_FOUND"
+            );
+        }
+
+        if (
+            from.currency !== transfer.currency ||
+            to.currency !== transfer.currency
+        ) {
+            throw new DomainError(
+                "CURRENCY_MISMATCH"
+            );
+        }
+
+        if (
+            transfer.date < from.start ||
+            transfer.date < to.start
+        ) {
+            throw new DomainError("INVALID_DATE");
         }
     }
 

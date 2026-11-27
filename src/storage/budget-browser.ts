@@ -13,10 +13,11 @@ import type { ExpenseCategoryId } from "../domain/finance/category";
 import {
     populateCurrencySelect,
 } from "../presentation/shared/currency-select.js";
-import {
-    saveBudget,
-    deleteBudget,
-} from "./budget-storage.js";
+import { FinanceService } from
+    "../application/services/finance-service.js";
+
+import { IndexedDbFinanceRepository } from
+    "../infrastructure/indexeddb/finance-repository.js";
 
 const monthInput =
     document.querySelector<HTMLInputElement>("#budget-month")!;
@@ -69,6 +70,10 @@ const statusLabels = {
 
 async function start() {
     const db = await openDatabase();
+
+    const finance = new FinanceService(
+        new IndexedDbFinanceRepository(db)
+    );
 
     populateCurrencySelect(currencySelect);
 
@@ -280,7 +285,7 @@ async function start() {
                 if (!confirmed) return;
 
                 await runBudgetWrite(
-                    () => deleteBudget(db, budget),
+                    () => finance.deleteBudget(budget),
                     "Đã xóa ngân sách."
                 );
             };
@@ -434,7 +439,7 @@ async function start() {
             }
 
             await runBudgetWrite(
-                () => saveBudget(db, budget, existing),
+                () => finance.saveBudget(budget, existing),
                 existing
                     ? "Đã cập nhật ngân sách."
                     : "Đã tạo ngân sách."

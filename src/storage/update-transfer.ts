@@ -1,10 +1,12 @@
 import type { Transfer } from "../domain/finance/transfer";
 import type { Account } from "../domain/finance/account";
+import type {
+    TransferChanges,
+} from "../application/commands/finance-mutation";
 
-export type TransferChanges = Pick<
-    Transfer,
-    "amountMinor" | "date" | "note"
->;
+export type {
+    TransferChanges,
+} from "../application/commands/finance-mutation";
 
 export function updateTransfer(
     db: IDBDatabase,

@@ -10,19 +10,13 @@ import {
     isValidLoanPayment,
     summarizeLoan,
 } from "../domain/finance/debt.js";
+import type {
+    DebtChange,
+} from "../application/commands/finance-mutation";
 
-export type DebtChange =
-    | { kind: "updateLoan"; next: Loan }
-    | { kind: "deleteLoan" }
-    | {
-        kind: "updatePayment";
-        expected: LoanPayment;
-        next: LoanPayment;
-    }
-    | {
-        kind: "deletePayment";
-        expected: LoanPayment;
-    };
+export type {
+    DebtChange,
+} from "../application/commands/finance-mutation";
 
 export function mutateDebt(
     db: IDBDatabase,
