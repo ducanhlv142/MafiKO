@@ -46,6 +46,15 @@ import { saveLoanPayment } from
 
 import { mutateDebt } from
     "../../storage/debt-mutation.js";
+import type {
+    FinanceSnapshot,
+    DebtSnapshot,
+} from "../../application/queries/finance-snapshot";
+
+import {
+    readFinanceSnapshot,
+    readDebtSnapshot,
+} from "./finance-query.js";
 
 export class IndexedDbFinanceRepository
     implements FinanceRepository {
@@ -271,5 +280,18 @@ export class IndexedDbFinanceRepository
                     )
                 );
         }
+    }
+    getFinanceSnapshot(): Promise<FinanceSnapshot> {
+
+        return readFinanceSnapshot(
+            this.db
+        );
+    }
+
+    getDebtSnapshot(): Promise<DebtSnapshot> {
+
+        return readDebtSnapshot(
+            this.db
+        );
     }
 }

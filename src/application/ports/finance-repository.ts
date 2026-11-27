@@ -6,10 +6,18 @@ import type { FinanceCommand } from
 import type {
     FinanceMutationCommand,
 } from "../commands/finance-mutation";
+import type {
+    FinanceSnapshot,
+    DebtSnapshot,
+} from "../queries/finance-snapshot";
 
 export interface FinanceRepository {
 
     listAccounts(): Promise<Account[]>;
+
+    getFinanceSnapshot(): Promise<FinanceSnapshot>;
+
+    getDebtSnapshot(): Promise<DebtSnapshot>;
 
     execute(
         command: FinanceCommand

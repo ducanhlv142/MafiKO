@@ -27,6 +27,11 @@ import type {
     DebtChange,
 } from "../commands/finance-mutation";
 
+import type {
+    FinanceSnapshot,
+    DebtSnapshot,
+} from "../queries/finance-snapshot";
+
 export class FinanceService {
 
     constructor(
@@ -214,5 +219,15 @@ export class FinanceService {
             change,
             maxDate,
         });
+    }
+
+    getFinanceSnapshot(): Promise<FinanceSnapshot> {
+
+        return this.repository.getFinanceSnapshot();
+    }
+
+    getDebtSnapshot(): Promise<DebtSnapshot> {
+
+        return this.repository.getDebtSnapshot();
     }
 }

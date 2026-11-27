@@ -7,7 +7,6 @@ import { createTransfer, transferMovement } from "../domain/finance/transfer.js"
 import type { Transfer } from "../domain/finance/transfer";
 import { categories } from "../domain/finance/category.js";
 import { summarizeMonth } from "../domain/finance/monthly-summary.js";
-import { createBackup } from "./backup.js";
 import {
     savingsCashMovement,
     savingsMovementCash,
@@ -47,13 +46,6 @@ function today(): string {
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${d.getFullYear()}-${month}-${day}`;
-}
-
-function read<T>(request: IDBRequest<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
 }
 
 function updateCategories() {
@@ -476,13 +468,49 @@ async function start() {
         }
     };
 
+    let refreshVersion = 0;
+
     async function refresh() {
-        const account = selectedAccount();
-        dateInput.min = account.openingBalanceDate;
 
-        const backup = await createBackup(db);
+        const version = ++refreshVersion;
 
-        if (accountSelect.value !== account.id) return;
+        const selected = selectedAccount();
+
+        const backup =
+            await finance.getFinanceSnapshot();
+
+        if (
+            version !== refreshVersion ||
+            accountSelect.value !== selected.id
+        ) {
+            return;
+        }
+
+        const account = backup.accounts.find(
+            a => a.id === selected.id
+        );
+
+        if (
+            !account ||
+            account.currency !== selected.currency ||
+            account.kind !== selected.kind ||
+            account.openingBalanceDate !==
+            selected.openingBalanceDate ||
+            account.openingBalanceMinor !==
+            selected.openingBalanceMinor
+        ) {
+
+            balance.textContent = "";
+
+            historyList.replaceChildren();
+
+            throw new Error(
+                "Tài khoản đã thay đổi. Hãy tải lại trang."
+            );
+        }
+
+        dateInput.min =
+            account.openingBalanceDate;
 
         const entries = backup.transactions.filter(
             t => t.accountId === account.id

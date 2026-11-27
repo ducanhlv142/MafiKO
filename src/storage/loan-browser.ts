@@ -15,7 +15,6 @@ import {
     getLoanMaturity,
 } from "../domain/finance/loan-interest.js";
 import { openDatabase } from "./database.js";
-import { createBackup } from "./backup.js";
 import {
     populateCurrencySelect,
 } from "../presentation/shared/currency-select.js";
@@ -580,7 +579,8 @@ async function start() {
         ready = false;
         saveButton.disabled = true;
 
-        const backup = await createBackup(db);
+        const backup =
+            await finance.getDebtSnapshot();
 
         if (version !== refreshVersion) return;
 

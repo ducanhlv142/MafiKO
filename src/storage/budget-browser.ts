@@ -7,7 +7,6 @@ import {
 } from "../domain/finance/budget.js";
 
 import { openDatabase } from "./database.js";
-import { createBackup } from "./backup.js";
 import type { Budget } from "../domain/finance/budget";
 import type { ExpenseCategoryId } from "../domain/finance/category";
 import {
@@ -133,7 +132,8 @@ async function start() {
             return;
         }
 
-        const backup = await createBackup(db);
+        const backup =
+            await finance.getFinanceSnapshot();
 
         if (version !== refreshVersion) return;
 

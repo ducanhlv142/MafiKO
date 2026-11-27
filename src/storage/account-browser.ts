@@ -39,25 +39,59 @@ function today(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-function showAccounts(db: IDBDatabase) {
-  const request = db.transaction("accounts").objectStore("accounts").getAll();
+let accountsRenderVersion = 0;
 
-  request.onsuccess = () => {
-    const accounts: Account[] = request.result;
+async function showAccounts(
+  finance: FinanceService
+): Promise<void> {
+
+  const version =
+    ++accountsRenderVersion;
+
+  try {
+
+    const accounts =
+      await finance.listAccounts();
+
+    if (
+      version !== accountsRenderVersion
+    ) {
+      return;
+    }
+
     list.replaceChildren();
 
     for (const account of accounts) {
-      const item = document.createElement("li");
-      const amount = account.openingBalanceMinor.toLocaleString("vi-VN");
-      const label = account.kind === "credit_card" ? "Dư nợ đầu kỳ" : "Số dư đầu kỳ";
-      item.textContent = `${account.name} · ${label}: ${amount} ${account.currency}`;
+
+      const item =
+        document.createElement("li");
+
+      const amount =
+        account.openingBalanceMinor
+          .toLocaleString("vi-VN");
+
+      const label =
+        account.kind === "credit_card"
+          ? "Dư nợ đầu kỳ"
+          : "Số dư đầu kỳ";
+
+      item.textContent =
+        `${account.name} · ` +
+        `${label}: ${amount} ` +
+        account.currency;
+
       list.append(item);
     }
-  };
 
-  request.onerror = () => {
-    status.textContent = "Không đọc được danh sách tài khoản.";
-  };
+  } catch {
+
+    if (
+      version === accountsRenderVersion
+    ) {
+      status.textContent =
+        "Không đọc được danh sách tài khoản.";
+    }
+  }
 }
 
 async function start() {
@@ -630,7 +664,7 @@ async function start() {
       await restoreBackup(db, backup);
       pending = null;
       backupFile.value = "";
-      showAccounts(db);
+      await showAccounts(finance);
       preview.textContent = "Đã khôi phục sổ.";
     } catch (error) {
       preview.textContent = error instanceof Error ? error.message : "Khôi phục thất bại.";
@@ -641,7 +675,7 @@ async function start() {
   };
 
   dateInput.value = today();
-  showAccounts(db);
+  await showAccounts(finance);
   saveButton.disabled = false;
 
   form.onsubmit = async (event) => {
@@ -697,7 +731,7 @@ async function start() {
       status.textContent =
         `Đã thêm ${account.name}.`;
 
-      showAccounts(db);
+      await showAccounts(finance);
 
     } catch (error) {
 
