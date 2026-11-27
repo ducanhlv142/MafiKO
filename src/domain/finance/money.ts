@@ -1,9 +1,11 @@
 import type { CurrencyCode } from "./currency";
-
 import {
     getCurrencyDecimals,
     getCurrencyFactor,
+    isKnownCurrency,
 } from "./currency.js";
+import { DomainError } from "./errors.js";
+import { isSafeMinor } from "./validation.js";
 
 export interface Money {
     readonly currency: CurrencyCode;
@@ -17,10 +19,9 @@ export interface Money {
 export function assertSafeMinor(
     value: number
 ): void {
-    if (!Number.isSafeInteger(value)) {
-        throw new Error(
-            "Số tiền vượt giới hạn số nguyên an toàn."
-        );
+
+    if (!isSafeMinor(value)) {
+        throw new DomainError("MONEY_OVERFLOW");
     }
 }
 
@@ -28,9 +29,7 @@ function fromBigInt(value: bigint): number {
     const max = BigInt(Number.MAX_SAFE_INTEGER);
 
     if (value > max || value < -max) {
-        throw new Error(
-            "Số tiền vượt giới hạn số nguyên an toàn."
-        );
+        throw new DomainError("MONEY_OVERFLOW");
     }
 
     return Number(value);
@@ -48,9 +47,7 @@ export function parseMoney(
     const text = input.trim();
 
     if (!/^[+-]?\d+(\.\d+)?$/.test(text)) {
-        throw new Error(
-            "Định dạng số tiền không hợp lệ."
-        );
+        throw new DomainError("MONEY_FORMAT");
     }
 
     const decimals = getCurrencyDecimals(currency);
@@ -63,7 +60,8 @@ export function parseMoney(
         unsigned.split(".");
 
     if (fraction.length > decimals) {
-        throw new Error(
+        throw new DomainError(
+            "MONEY_PRECISION",
             `${currency} chỉ hỗ trợ ${decimals} chữ số thập phân.`
         );
     }
@@ -73,9 +71,7 @@ export function parseMoney(
     ).replace(/^0+/, "") || "0";
 
     if (digits.length > 16) {
-        throw new Error(
-            "Số tiền vượt giới hạn an toàn."
-        );
+        throw new DomainError("MONEY_OVERFLOW");
     }
 
     let result = BigInt(digits);
@@ -253,11 +249,14 @@ function assertSameCurrency(
     a: Money,
     b: Money
 ): void {
-
+    if (
+        !isKnownCurrency(a.currency) ||
+        !isKnownCurrency(b.currency)
+    ) {
+        throw new DomainError("UNKNOWN_CURRENCY");
+    }
     if (a.currency !== b.currency) {
-        throw new Error(
-            "Không thể tính toán trực tiếp giữa hai loại tiền."
-        );
+        throw new DomainError("CURRENCY_MISMATCH");
     }
 }
 
@@ -311,9 +310,7 @@ export function multiplyMinorByRatio(
     assertSafeMinor(denominator);
 
     if (denominator <= 0) {
-        throw new Error(
-            "Mẫu số phải lớn hơn 0."
-        );
+        throw new DomainError("INVALID_RATIO");
     }
 
     const product =

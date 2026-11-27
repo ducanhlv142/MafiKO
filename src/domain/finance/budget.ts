@@ -7,6 +7,12 @@ import {
     safeAddMinor,
     safeSubtractMinor,
 } from "./money.js";
+import {
+    isISOMonth,
+    isPositiveMinor,
+} from "./validation.js";
+
+import { DomainError } from "./errors.js";
 
 export interface Budget {
     id: string;
@@ -46,12 +52,10 @@ export function isValidBudget(value: unknown): value is Budget {
     const b = value as Budget;
 
     return (
-        typeof b.month === "string" &&
-        /^\d{4}-(0[1-9]|1[0-2])$/.test(b.month) &&
+        isISOMonth(b.month) &&
         isValidCurrency(b.currency) &&
         Object.hasOwn(categories.expense, b.categoryId) &&
-        Number.isSafeInteger(b.limitMinor) &&
-        b.limitMinor > 0 &&
+        isPositiveMinor(b.limitMinor) &&
         b.id === budgetId(
             b.month,
             b.currency,
@@ -75,7 +79,7 @@ export function createBudget(
     };
 
     if (!isValidBudget(budget)) {
-        throw new Error("Ngân sách không hợp lệ.");
+        throw new DomainError("INVALID_BUDGET");
     }
 
     return budget;
@@ -87,7 +91,7 @@ export function summarizeBudget(
     transactions: readonly Transaction[],
 ): BudgetSummary {
     if (!isValidBudget(budget)) {
-        throw new Error("Ngân sách không hợp lệ.");
+        throw new DomainError("INVALID_BUDGET");
     }
 
     const accountIds = new Set(

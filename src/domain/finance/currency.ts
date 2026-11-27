@@ -2,7 +2,7 @@ interface CurrencyDefinition {
     readonly name: string;
     readonly decimals: number;
 }
-
+import { DomainError } from "./errors.js";
 export const currencies = {
     VND: { name: "Vietnamese Dong", decimals: 0 },
     JPY: { name: "Japanese Yen", decimals: 0 },
@@ -55,6 +55,11 @@ export function isValidCurrency(
 export function getCurrencyDefinition(
     currency: CurrencyCode
 ): CurrencyDefinition {
+
+    if (!isKnownCurrency(currency)) {
+        throw new DomainError("UNKNOWN_CURRENCY");
+    }
+
     return currencies[currency];
 }
 

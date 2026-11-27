@@ -6,24 +6,20 @@ import type {
 import {
     summarizeLoan,
 } from "./debt.js";
+import { isISODate } from "./validation.js";
+import { DomainError } from "./errors.js";
 
 const DAY_MS = 86_400_000;
 
 function dayNumber(value: string): number {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        throw new Error("Ngày không hợp lệ.");
+
+    if (!isISODate(value)) {
+        throw new DomainError("INVALID_DATE");
     }
 
-    const date = new Date(`${value}T00:00:00Z`);
-
-    if (
-        !Number.isFinite(date.getTime()) ||
-        date.toISOString().slice(0, 10) !== value
-    ) {
-        throw new Error("Ngày không hợp lệ.");
-    }
-
-    return date.getTime() / DAY_MS;
+    return Date.parse(
+        `${value}T00:00:00Z`
+    ) / DAY_MS;
 }
 
 export function daysBetween(

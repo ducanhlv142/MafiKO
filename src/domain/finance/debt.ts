@@ -3,6 +3,13 @@ import { isValidCurrency } from "./currency.js";
 import {
     safeAddMinor as safeAdd,
 } from "./money.js";
+import {
+    isISODate as validDate,
+    isNonNegativeMinor as validMoney,
+    isNonEmptyString as validText,
+} from "./validation.js";
+
+import { DomainError } from "./errors.js";
 
 export type LoanDirection = "borrowed" | "lent";
 
@@ -44,31 +51,6 @@ export interface LoanSummary {
     totalPaidMinor: number;
 
     status: "active" | "settled";
-}
-
-function validDate(value: unknown): value is string {
-    if (
-        typeof value !== "string" ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(value)
-    ) {
-        return false;
-    }
-
-    const date = new Date(`${value}T00:00:00Z`);
-
-    return Number.isFinite(date.getTime()) &&
-        date.toISOString().slice(0, 10) === value;
-}
-
-function validMoney(value: unknown): value is number {
-    return typeof value === "number" &&
-        Number.isSafeInteger(value) &&
-        value >= 0;
-}
-
-function validText(value: unknown): value is string {
-    return typeof value === "string" &&
-        value.trim().length > 0;
 }
 
 export function isValidLoan(value: unknown): value is Loan {
