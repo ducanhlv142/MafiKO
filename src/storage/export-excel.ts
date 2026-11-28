@@ -16,6 +16,9 @@ import {
     getLoanMaturity,
 } from "../domain/finance/loan-interest.js";
 
+import { createCategoryCatalog } from
+    "../domain/finance/category-catalog.js";
+
 const ExcelJS = (
     globalThis as typeof globalThis & {
         ExcelJS: typeof import("exceljs");
@@ -81,6 +84,10 @@ export async function createExcelWorkbook(
 
     const accountMap = new Map(
         backup.accounts.map(a => [a.id, a])
+    );
+
+    const catalog = createCategoryCatalog(
+        backup.categories
     );
 
     const overview =
@@ -445,7 +452,10 @@ export async function createExcelWorkbook(
             id: budget.id,
             month: budget.month,
             currency: budget.currency,
-            category: categories.expense[budget.categoryId],
+            category: catalog.get(
+                budget.categoryId,
+                "expense"
+            ).name,
             limit: budget.limitMinor,
             spent: summary.spentMinor,
             remaining: summary.remainingMinor,

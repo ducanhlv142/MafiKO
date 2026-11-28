@@ -5,7 +5,6 @@ import { calculateBalance } from "../domain/finance/balance.js";
 import { openDatabase } from "./database.js";
 import { createTransfer, transferMovement } from "../domain/finance/transfer.js";
 import type { Transfer } from "../domain/finance/transfer";
-import { categories } from "../domain/finance/category.js";
 import { summarizeMonth } from "../domain/finance/monthly-summary.js";
 import {
     savingsCashMovement,
@@ -29,6 +28,12 @@ import { FinanceService } from
 import { IndexedDbFinanceRepository } from
     "../infrastructure/indexeddb/finance-repository.js";
 
+import { createCategoryCatalog } from
+    "../domain/finance/category-catalog.js";
+
+import { populateCategorySelect } from
+    "../presentation/shared/category-select.js";
+
 const accountSelect = document.querySelector<HTMLSelectElement>("#account")!;
 const form = document.querySelector<HTMLFormElement>("#entry")!;
 const kindSelect = form.querySelector<HTMLSelectElement>('select[name="kind"]')!;
@@ -46,23 +51,31 @@ function today(): string {
     return `${d.getFullYear()}-${month}-${day}`;
 }
 
-function updateCategories() {
-    const kind = kindSelect.value === "income" ? "income" : "expense";
-    categorySelect.replaceChildren();
-
-    for (const [id, label] of Object.entries(categories[kind])) {
-        categorySelect.add(new Option(label, id));
-    }
-}
-
-kindSelect.onchange = updateCategories;
-updateCategories();
-
 async function start() {
     const db = await openDatabase();
     const finance = new FinanceService(
         new IndexedDbFinanceRepository(db)
     );
+    let catalog = createCategoryCatalog(
+        await finance.listCategories()
+    );
+
+    function updateCategories() {
+
+        const kind = kindSelect.value === "income"
+            ? "income"
+            : "expense";
+
+        populateCategorySelect(
+            categorySelect,
+            catalog,
+            kind
+        );
+    }
+
+    kindSelect.onchange = updateCategories;
+
+    updateCategories();
     const accounts = await finance.listAccounts();
 
     for (const account of accounts) {
@@ -174,12 +187,16 @@ async function start() {
             `Thu: ${money(summary.income)} · Chi: ${money(summary.expense)} · ` +
             `Chênh lệch: ${money(summary.net)}`;
 
-        const labels: Readonly<Record<string, string>> = categories.expense;
         const sorted = [...summary.expenseByCategory].sort((a, b) => b[1] - a[1]);
 
         for (const [categoryId, amount] of sorted) {
             const row = reportBody.insertRow();
-            row.insertCell().textContent = labels[categoryId] ?? "Chưa phân loại";
+            row.insertCell().textContent =
+                categoryId === "uncategorized"
+
+                    ? "Chưa phân loại"
+
+                    : catalog.getLabel(categoryId);
             row.insertCell().textContent = money(amount);
         }
 
@@ -222,19 +239,32 @@ async function start() {
     let savingEdit = false;
 
     function updateEditCategories() {
+
         const kind = editKind.value === "income"
             ? "income"
             : "expense";
 
-        editCategory.replaceChildren();
+        const original = editingEntry;
 
-        editCategory.add(
-            new Option("Chưa phân loại", "")
+        const keepArchivedIds =
+            original &&
+                original.kind === kind &&
+                original.categoryId
+
+                ? [original.categoryId]
+
+                : [];
+
+        populateCategorySelect(
+            editCategory,
+            catalog,
+            kind,
+            {
+                includeUncategorized: true,
+
+                keepArchivedIds,
+            }
         );
-
-        for (const [id, label] of Object.entries(categories[kind])) {
-            editCategory.add(new Option(label, id));
-        }
     }
 
     editKind.onchange = updateEditCategories;
@@ -523,6 +553,11 @@ async function start() {
         const ledgerView =
             createLedgerView(backup);
 
+        catalog = createCategoryCatalog(
+            backup.categories
+        );
+
+        updateCategories();
         const reportEntries =
             ledgerView.getReportTransactions();
 
@@ -547,8 +582,12 @@ async function start() {
             transfer?: Transfer;
         }[] = entries.map((entry) => {
             const label = entry.kind === "expense" ? "Chi" : "Thu";
-            const labels: Readonly<Record<string, string>> = categories[entry.kind];
-            const category = labels[entry.categoryId ?? ""] ?? "Chưa phân loại";
+            const category =
+                entry.categoryId === undefined
+
+                    ? "Chưa phân loại"
+
+                    : catalog.getLabel(entry.categoryId);
 
             return {
                 entry,
@@ -711,18 +750,33 @@ async function start() {
                 const select = document.createElement("select");
                 select.setAttribute("aria-label", `Đổi danh mục cho ${entry.note}`);
 
-                const placeholder = new Option("Chưa phân loại", "");
-                placeholder.disabled = true;
-                select.add(placeholder);
+                populateCategorySelect(
+                    select,
+                    catalog,
+                    entry.kind,
+                    {
+                        selectedId:
+                            entry.categoryId ?? "",
 
-                for (const [id, label] of Object.entries(categories[entry.kind])) {
-                    select.add(new Option(label, id));
-                }
+                        includeUncategorized: true,
 
-                select.value = entry.categoryId ?? "";
+                        keepArchivedIds:
+                            entry.categoryId
+                                ? [entry.categoryId]
+                                : [],
+                    }
+                );
+
+                select.options[0].disabled = true;
 
                 select.onchange = async () => {
                     const categoryId = select.value as NonNullable<Transaction["categoryId"]>;
+                    if (
+                        !categoryId ||
+                        categoryId === entry.categoryId
+                    ) {
+                        return;
+                    }
                     select.disabled = true;
 
                     try {
@@ -888,8 +942,20 @@ async function start() {
         if (kind !== "income" && kind !== "expense") return;
         const categoryId = categorySelect.value as NonNullable<Transaction["categoryId"]>;
 
-        if (!Object.hasOwn(categories[kind], categoryId)) {
-            status.textContent = "Chọn danh mục phù hợp với loại giao dịch.";
+        try {
+
+            catalog.requireAssignable(
+                categoryId,
+                kind
+            );
+
+        } catch (error) {
+
+            status.textContent =
+                error instanceof Error
+                    ? error.message
+                    : "Chọn danh mục phù hợp.";
+
             return;
         }
 

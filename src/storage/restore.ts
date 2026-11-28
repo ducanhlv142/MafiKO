@@ -178,9 +178,20 @@ export function parseBackup(text: string): FinanceBackup {
     checkIds(data.budgets, "Ngân sách");
 
     for (const budget of data.budgets) {
+
         if (!isValidBudget(budget)) {
-            throw new Error("Bản sao chứa ngân sách không hợp lệ.");
+
+            throw new DomainError(
+                "INVALID_BUDGET"
+            );
         }
+
+        assertCategoryReference(
+            catalog,
+            budget.categoryId,
+            "expense",
+            true
+        );
     }
 
     checkIds(data.accounts, "Tài khoản");

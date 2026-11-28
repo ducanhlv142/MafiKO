@@ -1,7 +1,6 @@
 import type { Account } from "../domain/finance/account";
 import { createLedgerView } from
     "../domain/finance/ledger-view.js";
-import { categories } from "../domain/finance/category.js";
 import {
     summarizeBudget,
     createBudget,
@@ -9,7 +8,6 @@ import {
 
 import { openDatabase } from "./database.js";
 import type { Budget } from "../domain/finance/budget";
-import type { ExpenseCategoryId } from "../domain/finance/category";
 import {
     populateCurrencySelect,
 } from "../presentation/shared/currency-select.js";
@@ -18,6 +16,17 @@ import { FinanceService } from
 
 import { IndexedDbFinanceRepository } from
     "../infrastructure/indexeddb/finance-repository.js";
+import { createCategoryCatalog } from
+    "../domain/finance/category-catalog.js";
+
+import { populateCategorySelect } from
+    "../presentation/shared/category-select.js";
+
+import {
+    safeAddMinor,
+    safeSubtractMinor,
+    sumMinor,
+} from "../domain/finance/money.js";
 
 const monthInput =
     document.querySelector<HTMLInputElement>("#budget-month")!;
@@ -101,10 +110,6 @@ async function start() {
             "#budget-save"
         )!;
 
-    for (const [id, label] of Object.entries(categories.expense)) {
-        budgetCategory.add(new Option(label, id));
-    }
-
     let visibleBudgets = new Map<string, Budget>();
 
     let writing = false;
@@ -149,6 +154,29 @@ async function start() {
                 b.currency === currency
         );
 
+        const catalog = createCategoryCatalog(
+            backup.categories
+        );
+
+        for (const budget of budgets) {
+
+            catalog.get(
+                budget.categoryId,
+                "expense"
+            );
+        }
+
+        populateCategorySelect(
+            budgetCategory,
+            catalog,
+            "expense",
+            {
+                keepArchivedIds: budgets.map(
+                    budget => budget.categoryId
+                ),
+            }
+        );
+
         const money = (value: number) =>
             `${value.toLocaleString("vi-VN")} ${currency}`;
 
@@ -162,13 +190,20 @@ async function start() {
                 reportTransactions
             );
 
-            totalLimit += budget.limitMinor;
-            totalSpent += summary.spentMinor;
+            totalLimit = safeAddMinor(
+                totalLimit,
+                budget.limitMinor
+            );
+
+            totalSpent = safeAddMinor(
+                totalSpent,
+                summary.spentMinor
+            );
 
             const row = list.insertRow();
 
             const values = [
-                categories.expense[budget.categoryId],
+                catalog.getLabel(budget.categoryId),
                 money(budget.limitMinor),
                 money(summary.spentMinor),
                 money(summary.remainingMinor),
@@ -226,7 +261,7 @@ async function start() {
                 const item = document.createElement("li");
 
                 const name =
-                    categories.expense[budget.categoryId];
+                    catalog.getLabel(budget.categoryId);
 
                 item.className = `budget-${summary.status}`;
 
@@ -281,7 +316,7 @@ async function start() {
                 if (writing) return;
 
                 const confirmed = window.confirm(
-                    `Xóa ngân sách "${categories.expense[budget.categoryId]}"?\n\n` +
+                    `Xóa ngân sách "${catalog.getLabel(budget.categoryId)}"?\n\n` +
                     `Hạn mức: ${money(budget.limitMinor)}\n\n` +
                     "Các giao dịch thu chi vẫn được giữ nguyên."
                 );
@@ -300,7 +335,12 @@ async function start() {
         totals.textContent =
             `Hạn mức: ${money(totalLimit)} · ` +
             `Đã sử dụng: ${money(totalSpent)} · ` +
-            `Còn lại: ${money(totalLimit - totalSpent)}`;
+            `Còn lại: ${money(
+                safeSubtractMinor(
+                    totalLimit,
+                    totalSpent
+                )
+            )}`;
 
         const accountIds = new Set(
             backup.accounts
@@ -308,19 +348,25 @@ async function start() {
                 .map(a => a.id)
         );
 
-        const allExpenses = reportTransactions
-            .filter(t =>
-                t.kind === "expense" &&
-                t.date.slice(0, 7) === month &&
-                accountIds.has(t.accountId)
-            )
-            .reduce(
-                (sum, t) => sum + t.amountMinor,
-                0
-            );
+        const allExpenses = sumMinor(
+
+            reportTransactions
+                .filter(t =>
+
+                    t.kind === "expense" &&
+
+                    t.date.slice(0, 7) === month &&
+
+                    accountIds.has(t.accountId)
+                )
+                .map(t => t.amountMinor)
+        );
 
         const unbudgetedSpent =
-            allExpenses - totalSpent;
+            safeSubtractMinor(
+                allExpenses,
+                totalSpent
+            );
 
         spending.textContent =
             `Tổng chi thực tế: ${money(allExpenses)} · ` +
@@ -425,7 +471,7 @@ async function start() {
             const budget = createBudget(
                 monthInput.value,
                 currencySelect.value as Account["currency"],
-                budgetCategory.value as ExpenseCategoryId,
+                budgetCategory.value,
                 Number(budgetLimit.value)
             );
 

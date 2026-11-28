@@ -1,8 +1,6 @@
 import type { Account } from "./account";
 import type { Transaction } from "./transaction";
-import type { ExpenseCategoryId } from "./category";
 import { isValidCurrency } from "./currency.js";
-import { categories } from "./category.js";
 import {
     safeAddMinor,
     safeSubtractMinor,
@@ -14,11 +12,15 @@ import {
 
 import { DomainError } from "./errors.js";
 
+import {
+    isCategoryIdForKind,
+} from "./category-catalog.js";
+
 export interface Budget {
     id: string;
     month: string;
     currency: Account["currency"];
-    categoryId: ExpenseCategoryId;
+    categoryId: string;
     limitMinor: number;
 }
 
@@ -39,7 +41,7 @@ export interface BudgetSummary {
 export function budgetId(
     month: string,
     currency: Account["currency"],
-    categoryId: ExpenseCategoryId,
+    categoryId: string,
 ): string {
     return `${month}:${currency}:${categoryId}`;
 }
@@ -54,7 +56,10 @@ export function isValidBudget(value: unknown): value is Budget {
     return (
         isISOMonth(b.month) &&
         isValidCurrency(b.currency) &&
-        Object.hasOwn(categories.expense, b.categoryId) &&
+        isCategoryIdForKind(
+            b.categoryId,
+            "expense"
+        ) &&
         isPositiveMinor(b.limitMinor) &&
         b.id === budgetId(
             b.month,
@@ -67,7 +72,7 @@ export function isValidBudget(value: unknown): value is Budget {
 export function createBudget(
     month: string,
     currency: Account["currency"],
-    categoryId: ExpenseCategoryId,
+    categoryId: string,
     limitMinor: number,
 ): Budget {
     const budget: Budget = {
