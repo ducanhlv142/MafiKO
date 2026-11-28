@@ -20,6 +20,9 @@ import type {
     SavingsMovement,
 } from "../../domain/finance/savings";
 
+import type { CategoryRecord } from
+    "../../domain/finance/category-catalog";
+
 export interface DebtSnapshot {
     accounts: Account[];
     loans: Loan[];
@@ -30,9 +33,14 @@ export interface FinanceSnapshot
     extends DebtSnapshot {
 
     transactions: Transaction[];
+
     transfers: Transfer[];
+
     budgets: Budget[];
 
     savingsPlans: SavingsPlan[];
+
     savingsMovements: SavingsMovement[];
+
+    categories: CategoryRecord[];
 }

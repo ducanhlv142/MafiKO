@@ -44,10 +44,10 @@ afterEach(() => {
 
 describe("IndexedDB Database", () => {
 
-    it("creates all eight object stores", async () => {
+    it("creates all nine object stores", async () => {
         db = await openDatabase();
 
-        expect(db.version).toBe(6);
+        expect(db.version).toBe(7);
 
         expect(
             Array.from(db.objectStoreNames).sort()
@@ -55,10 +55,10 @@ describe("IndexedDB Database", () => {
             [...FINANCE_STORES].sort()
         );
 
-        expect(db.objectStoreNames.length).toBe(8);
+        expect(db.objectStoreNames.length).toBe(9);
     });
 
-    it("upgrades v5 to v6 without deleting accounts", async () => {
+    it("upgrades v5 to v7 without deleting accounts", async () => {
 
         const fixture = makeFinanceFixture();
 
@@ -143,7 +143,10 @@ describe("IndexedDB Database", () => {
 
         const backup = await createBackup(db);
 
-        expect(db.version).toBe(6);
+        expect(db.version).toBe(7);
+        expect(backup.categories).toEqual(
+            fixture.categories
+        );
         expect(backup.accounts).toEqual(fixture.accounts);
         expect(backup.savingsPlans).toEqual([]);
         expect(backup.savingsMovements).toEqual([]);
@@ -162,7 +165,7 @@ describe("IndexedDB Database", () => {
 
         const exported = await createBackup(db);
 
-        expect(exported.formatVersion).toBe(4);
+        expect(exported.formatVersion).toBe(5);
 
         for (const store of FINANCE_STORES) {
             expect(exported[store]).toEqual(fixture[store]);
@@ -228,7 +231,7 @@ describe("Backup Compatibility", () => {
                 JSON.stringify(legacy)
             );
 
-            expect(parsed.formatVersion).toBe(4);
+            expect(parsed.formatVersion).toBe(5);
 
             expect(parsed.accounts).toEqual(fixture.accounts);
             expect(parsed.transactions).toEqual(fixture.transactions);

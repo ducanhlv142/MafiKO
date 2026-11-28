@@ -3,7 +3,10 @@ import type { Transaction } from "../domain/finance/transaction";
 import type { Transfer } from "../domain/finance/transfer";
 import type { FinanceBackup } from "./backup";
 import type { ImportRow } from "./import-csv";
-import { FINANCE_STORES } from "./backup.js";
+import {
+    FINANCE_STORES,
+    BACKUP_FORMAT_VERSION,
+} from "./backup.js";
 import { prepareCsvImport } from "./import-csv.js";
 import { detectDuplicates } from "./detect-duplicates.js";
 
@@ -56,13 +59,17 @@ export function commitCsvImport(
 
         const savingsMovementRequest =
             tx.objectStore("savingsMovements").getAll();
+        const categoryRequest =
+            tx.objectStore("categories").getAll();
         const transferRequest = transfers.getAll();
 
         transferRequest.onsuccess = () => {
             try {
                 const backup: FinanceBackup = {
                     app: "MafiKO",
-                    formatVersion: 4,
+                    formatVersion: BACKUP_FORMAT_VERSION,
+
+                    categories: categoryRequest.result,
                     savingsPlans: savingsPlanRequest.result,
                     savingsMovements: savingsMovementRequest.result,
                     loans: loanRequest.result,

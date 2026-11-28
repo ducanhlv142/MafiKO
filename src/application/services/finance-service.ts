@@ -32,6 +32,9 @@ import type {
     DebtSnapshot,
 } from "../queries/finance-snapshot";
 
+import type { CategoryRecord } from
+    "../../domain/finance/category-catalog";
+
 export class FinanceService {
 
     constructor(
@@ -229,5 +232,10 @@ export class FinanceService {
     getDebtSnapshot(): Promise<DebtSnapshot> {
 
         return this.repository.getDebtSnapshot();
+    }
+
+    listCategories(): Promise<CategoryRecord[]> {
+
+        return this.repository.listCategories();
     }
 }

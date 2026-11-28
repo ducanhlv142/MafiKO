@@ -1,11 +1,25 @@
 import type { FinanceBackup } from "../../src/storage/backup";
+import { createDefaultCategories } from
+    "../../src/domain/finance/category-catalog.js";
+
+import { BACKUP_FORMAT_VERSION } from
+    "../../src/storage/backup.js";
 
 export const TEST_DATE = "2026-11-26";
 
 export function makeFinanceFixture(): FinanceBackup {
     return {
         app: "MafiKO",
-        formatVersion: 4,
+        formatVersion: BACKUP_FORMAT_VERSION,
+
+        categories: createDefaultCategories().sort(
+            (a, b) =>
+                a.id < b.id
+                    ? -1
+                    : a.id > b.id
+                        ? 1
+                        : 0
+        ),
         exportedAt: "2026-11-26T08:00:00.000Z",
 
         accounts: [

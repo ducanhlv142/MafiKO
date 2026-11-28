@@ -1,5 +1,9 @@
+import {
+  createDefaultCategories,
+} from "../domain/finance/category-catalog.js";
+
 const DATABASE_NAME = "mafiko";
-const DATABASE_VERSION = 6;
+const DATABASE_VERSION = 7;
 
 export function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -144,6 +148,31 @@ export function openDatabase(): Promise<IDBDatabase> {
           "byKind",
           "kind"
         );
+      }
+      if (event.oldVersion < 7) {
+
+        const categoryStore = db.createObjectStore(
+          "categories",
+          {
+            keyPath: "id",
+          }
+        );
+
+        categoryStore.createIndex(
+          "byKind",
+          "kind"
+        );
+
+        categoryStore.createIndex(
+          "byParent",
+          "parentId"
+        );
+
+        for (const category of
+          createDefaultCategories()) {
+
+          categoryStore.add(category);
+        }
       }
     };
 

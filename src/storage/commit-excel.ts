@@ -1,6 +1,9 @@
 import type { FinanceBackup } from "./backup";
 import type { ExcelImportRow } from "./import-excel";
-import { FINANCE_STORES } from "./backup.js";
+import {
+    FINANCE_STORES,
+    BACKUP_FORMAT_VERSION,
+} from "./backup.js";
 import { parseBackup } from "./restore.js";
 
 export function commitExcelImport(
@@ -45,13 +48,17 @@ export function commitExcelImport(
 
         const savingsMovementRequest =
             tx.objectStore("savingsMovements").getAll();
+        const categoryRequest =
+            tx.objectStore("categories").getAll();
         const transferRequest = transfers.getAll();
 
         transferRequest.onsuccess = () => {
             try {
                 const current: FinanceBackup = {
                     app: "MafiKO",
-                    formatVersion: 4,
+                    formatVersion: BACKUP_FORMAT_VERSION,
+
+                    categories: categoryRequest.result,
                     savingsPlans: savingsPlanRequest.result,
                     savingsMovements: savingsMovementRequest.result,
                     loans: loanRequest.result,

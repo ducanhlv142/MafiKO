@@ -56,6 +56,12 @@ import {
     readDebtSnapshot,
 } from "./finance-query.js";
 
+import type { CategoryRecord } from
+    "../../domain/finance/category-catalog";
+
+import { readCategories } from
+    "./finance-query.js";
+
 export class IndexedDbFinanceRepository
     implements FinanceRepository {
 
@@ -291,6 +297,12 @@ export class IndexedDbFinanceRepository
     getDebtSnapshot(): Promise<DebtSnapshot> {
 
         return readDebtSnapshot(
+            this.db
+        );
+    }
+    listCategories(): Promise<CategoryRecord[]> {
+
+        return readCategories(
             this.db
         );
     }

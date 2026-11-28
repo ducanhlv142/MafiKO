@@ -10,6 +10,8 @@ import type {
     FinanceSnapshot,
     DebtSnapshot,
 } from "../queries/finance-snapshot";
+import type { CategoryRecord } from
+    "../../domain/finance/category-catalog";
 
 export interface FinanceRepository {
 
@@ -18,6 +20,8 @@ export interface FinanceRepository {
     getFinanceSnapshot(): Promise<FinanceSnapshot>;
 
     getDebtSnapshot(): Promise<DebtSnapshot>;
+
+    listCategories(): Promise<CategoryRecord[]>;
 
     execute(
         command: FinanceCommand

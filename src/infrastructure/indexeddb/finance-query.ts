@@ -3,6 +3,9 @@ import type {
     DebtSnapshot,
 } from "../../application/queries/finance-snapshot";
 
+import type { CategoryRecord } from
+    "../../domain/finance/category-catalog";
+
 export const FINANCE_STORES = [
     "accounts",
     "transactions",
@@ -12,6 +15,7 @@ export const FINANCE_STORES = [
     "loanPayments",
     "savingsPlans",
     "savingsMovements",
+    "categories",
 ] as const;
 
 export function readFinanceSnapshot(
@@ -49,6 +53,9 @@ export function readFinanceSnapshot(
         const savingsMovements =
             tx.objectStore("savingsMovements").getAll();
 
+        const categories =
+            tx.objectStore("categories").getAll();
+
         tx.oncomplete = () => {
 
             resolve({
@@ -62,6 +69,8 @@ export function readFinanceSnapshot(
 
                 savingsPlans: savingsPlans.result,
                 savingsMovements: savingsMovements.result,
+
+                categories: categories.result,
             });
         };
 
@@ -116,6 +125,40 @@ export function readDebtSnapshot(
                 tx.error ??
                 new Error(
                     "Không đọc được dữ liệu khoản vay."
+                )
+            );
+        };
+    });
+}
+
+export function readCategories(
+    db: IDBDatabase
+): Promise<CategoryRecord[]> {
+
+    return new Promise((resolve, reject) => {
+
+        const tx = db.transaction(
+            "categories",
+            "readonly"
+        );
+
+        const request = tx
+            .objectStore("categories")
+            .getAll();
+
+        tx.oncomplete = () => {
+
+            resolve(
+                request.result as CategoryRecord[]
+            );
+        };
+
+        tx.onabort = () => {
+
+            reject(
+                tx.error ??
+                new Error(
+                    "Không đọc được danh mục."
                 )
             );
         };

@@ -1,6 +1,17 @@
 import type { FinanceBackup } from "./backup";
 import { isValidBudget } from "../domain/finance/budget.js";
-import { FINANCE_STORES } from "./backup.js";
+import {
+    FINANCE_STORES,
+    BACKUP_FORMAT_VERSION,
+} from "./backup.js";
+
+import {
+    createDefaultCategories,
+    assertValidCategoryCatalog,
+} from "../domain/finance/category-catalog.js";
+
+import type { CategoryRecord } from
+    "../domain/finance/category-catalog";
 import type {
     SavingsPlan,
     SavingsMovement,
@@ -49,7 +60,7 @@ function checkIds(rows: unknown[], label: string) {
 export function parseBackup(text: string): FinanceBackup {
     const data = JSON.parse(text);
 
-    if (data?.app !== "MafiKO" || ![1, 2, 3, 4].includes(data.formatVersion) ||
+    if (data?.app !== "MafiKO" || ![1, 2, 3, 4, 5].includes(data.formatVersion) ||
         typeof data.exportedAt !== "string" || !Number.isFinite(Date.parse(data.exportedAt)) ||
         !Array.isArray(data.accounts) || !Array.isArray(data.transactions) ||
         !Array.isArray(data.transfers)) {
@@ -68,6 +79,58 @@ export function parseBackup(text: string): FinanceBackup {
     if (data.formatVersion < 4) {
         data.savingsPlans = [];
         data.savingsMovements = [];
+    }
+
+    if (data.formatVersion < 5) {
+
+        data.categories =
+            createDefaultCategories();
+    }
+
+    if (!Array.isArray(data.categories)) {
+
+        throw new DomainError(
+            "INVALID_BACKUP"
+        );
+    }
+
+    const categoryRecords: CategoryRecord[] =
+        data.categories;
+
+    assertValidCategoryCatalog(
+        categoryRecords
+    );
+
+    // Temporary compatibility gate.
+    // Remove when dynamic categories are fully integrated.
+
+    const defaults = createDefaultCategories();
+
+    const isDefaultCatalog =
+        categoryRecords.length === defaults.length &&
+
+        defaults.every(expected =>
+
+            categoryRecords.some(current =>
+
+                current.id === expected.id &&
+
+                current.kind === expected.kind &&
+
+                current.name === expected.name &&
+
+                current.archived === expected.archived &&
+
+                current.parentId === expected.parentId
+            )
+        );
+
+    if (!isDefaultCatalog) {
+
+        throw new DomainError(
+            "INVALID_BACKUP",
+            "Danh mục tùy chỉnh chưa được hỗ trợ trong phiên bản này."
+        );
     }
 
     if (
@@ -343,7 +406,7 @@ export function parseBackup(text: string): FinanceBackup {
 
     return {
         ...data,
-        formatVersion: 4,
+        formatVersion: BACKUP_FORMAT_VERSION,
     };
 }
 

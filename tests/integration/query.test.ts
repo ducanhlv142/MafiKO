@@ -227,7 +227,7 @@ describe("Finance Queries", () => {
             .toHaveLength(2);
     });
 
-    it("keeps backup version four compatible", async () => {
+    it("exports backup version five", async () => {
 
         const snapshot =
             await finance.getFinanceSnapshot();
@@ -244,7 +244,7 @@ describe("Finance Queries", () => {
 
         expect(app).toBe("MafiKO");
 
-        expect(formatVersion).toBe(4);
+        expect(formatVersion).toBe(5);
 
         expect(
             Number.isFinite(
