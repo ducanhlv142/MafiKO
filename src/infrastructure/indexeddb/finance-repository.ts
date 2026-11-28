@@ -108,7 +108,10 @@ export class IndexedDbFinanceRepository
             switch (command.type) {
 
                 case "transaction.create":
-                    stores.push("transactions");
+                    stores.push(
+                        "transactions",
+                        "categories"
+                    );
                     break;
 
                 case "transfer.create":
@@ -152,6 +155,13 @@ export class IndexedDbFinanceRepository
             const accountStore =
                 tx.objectStore("accounts");
 
+            const categoryRequest =
+                command.type === "transaction.create"
+
+                    ? tx.objectStore("categories").getAll()
+
+                    : undefined;
+
             const accountRequest =
                 accountStore.getAll();
 
@@ -163,7 +173,8 @@ export class IndexedDbFinanceRepository
 
                     validateFinanceCommand(
                         command,
-                        accounts
+                        accounts,
+                        categoryRequest?.result ?? []
                     );
 
                     switch (command.type) {

@@ -25,6 +25,14 @@ import { isISODate } from
 import { DomainError } from
     "../../domain/finance/errors.js";
 
+import type { CategoryRecord } from
+    "../../domain/finance/category-catalog";
+
+import {
+    createCategoryCatalog,
+    assertCategoryReference,
+} from "../../domain/finance/category-catalog.js";
+
 export type FinanceCommand =
     | {
         type: "account.create";
@@ -65,7 +73,8 @@ function requireAccount(
 
 export function validateFinanceCommand(
     command: FinanceCommand,
-    accounts: readonly Account[]
+    accounts: readonly Account[],
+    categoryRecords: readonly CategoryRecord[]
 ): void {
 
     if (!isISODate(command.maxDate)) {
@@ -110,11 +119,14 @@ export function validateFinanceCommand(
 
             const entry = command.entry;
 
-            if (!isValidTransaction(entry)) {
-                throw new DomainError(
-                    "INVALID_TRANSACTION"
-                );
-            }
+            const catalog =
+                createCategoryCatalog(categoryRecords);
+
+            assertCategoryReference(
+                catalog,
+                entry.categoryId,
+                entry.kind
+            );
 
             const account = requireAccount(
                 accounts,

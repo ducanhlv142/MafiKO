@@ -1,8 +1,10 @@
-import { categories } from
-    "../domain/finance/category.js";
-
 import type { Transaction } from
     "../domain/finance/transaction";
+
+import {
+    createCategoryCatalog,
+    assertCategoryReference,
+} from "../domain/finance/category-catalog.js";
 
 import { DomainError } from
     "../domain/finance/errors.js";
@@ -18,7 +20,10 @@ export function changeCategory(
     return new Promise((resolve, reject) => {
 
         const tx = db.transaction(
-            "transactions",
+            [
+                "transactions",
+                "categories",
+            ],
             "readwrite"
         );
 
@@ -27,6 +32,9 @@ export function changeCategory(
 
         const request =
             store.get(expected.id);
+
+        const categoryRequest =
+            tx.objectStore("categories").getAll();
 
         let failure: unknown;
 
@@ -43,14 +51,16 @@ export function changeCategory(
             );
         };
 
-        request.onsuccess = () => {
+        categoryRequest.onsuccess = () => {
 
             try {
 
-                const entry: Transaction | undefined =
+                const entry:
+                    Transaction | undefined =
                     request.result;
 
                 if (!entry) {
+
                     throw new DomainError(
                         "RECORD_NOT_FOUND"
                     );
@@ -60,24 +70,27 @@ export function changeCategory(
                     JSON.stringify(entry) !==
                     JSON.stringify(expected)
                 ) {
+
                     throw new DomainError(
                         "RECORD_CONFLICT"
                     );
                 }
 
-                if (
-                    !Object.hasOwn(
-                        categories[entry.kind],
-                        categoryId
-                    )
-                ) {
-                    throw new DomainError(
-                        "INVALID_TRANSACTION"
+                const catalog =
+                    createCategoryCatalog(
+                        categoryRequest.result
                     );
-                }
+
+                assertCategoryReference(
+                    catalog,
+                    categoryId,
+                    entry.kind
+                );
 
                 store.put({
+
                     ...entry,
+
                     categoryId,
                 });
 

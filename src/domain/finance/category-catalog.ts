@@ -354,11 +354,12 @@ export function createCategoryCatalog(
     return {
 
         get(
-            id: string
+            id: string,
+            kind?: CategoryKind
         ): CategoryRecord {
 
             return {
-                ...requireCategory(id),
+                ...requireCategory(id, kind),
             };
         },
 
@@ -490,4 +491,51 @@ export function updateCategoryDefinition(
     assertValidCategoryCatalog(next);
 
     return next;
+}
+
+export type CategoryCatalog =
+    ReturnType<typeof createCategoryCatalog>;
+
+export function isCategoryIdForKind(
+    value: unknown,
+    kind: CategoryKind
+): value is string {
+
+    if (!isCategoryId(value)) {
+        return false;
+    }
+
+    const builtinKind = builtinKinds.get(value);
+
+    return (
+        builtinKind === undefined ||
+        builtinKind === kind
+    );
+}
+
+export function assertCategoryReference(
+    catalog: CategoryCatalog,
+    categoryId: string | undefined,
+    kind: CategoryKind,
+    allowArchived = false
+): void {
+
+    if (categoryId === undefined) {
+        return;
+    }
+
+    if (allowArchived) {
+
+        catalog.get(
+            categoryId,
+            kind
+        );
+
+    } else {
+
+        catalog.requireAssignable(
+            categoryId,
+            kind
+        );
+    }
 }

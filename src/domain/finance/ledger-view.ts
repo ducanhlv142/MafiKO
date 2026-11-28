@@ -20,10 +20,21 @@ import { sumMinor } from "./money.js";
 
 import { DomainError } from "./errors.js";
 
+import type { CategoryRecord } from
+    "./category-catalog";
+
+import {
+    createDefaultCategories,
+    createCategoryCatalog,
+    assertCategoryReference,
+} from "./category-catalog.js";
+
 export interface LedgerSnapshot
     extends FinancialLedger {
 
     accounts: readonly Account[];
+
+    categories?: readonly CategoryRecord[];
 }
 
 export function createLedgerView(
@@ -54,6 +65,21 @@ export function createLedgerView(
         }
 
         return account;
+    }
+
+    const catalog = createCategoryCatalog(
+        snapshot.categories ??
+        createDefaultCategories()
+    );
+
+    for (const entry of snapshot.transactions) {
+
+        assertCategoryReference(
+            catalog,
+            entry.categoryId,
+            entry.kind,
+            true
+        );
     }
 
     const events = projectLedger(snapshot);

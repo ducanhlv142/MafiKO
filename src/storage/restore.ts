@@ -8,6 +8,8 @@ import {
 import {
     createDefaultCategories,
     assertValidCategoryCatalog,
+    createCategoryCatalog,
+    assertCategoryReference,
 } from "../domain/finance/category-catalog.js";
 
 import type { CategoryRecord } from
@@ -100,6 +102,11 @@ export function parseBackup(text: string): FinanceBackup {
     assertValidCategoryCatalog(
         categoryRecords
     );
+
+    const catalog =
+        createCategoryCatalog(
+            categoryRecords
+        );
 
     // Temporary compatibility gate.
     // Remove when dynamic categories are fully integrated.
@@ -207,6 +214,13 @@ export function parseBackup(text: string): FinanceBackup {
                 "INVALID_TRANSACTION"
             );
         }
+
+        assertCategoryReference(
+            catalog,
+            entry.categoryId,
+            entry.kind,
+            true
+        );
 
         const account = accounts.get(
             entry.accountId

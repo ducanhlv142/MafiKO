@@ -1,9 +1,27 @@
-import type { Transaction } from "../domain/finance/transaction";
-import type { Account } from "../domain/finance/account";
-import { categories } from "../domain/finance/category.js";
-import type {
-    TransactionChanges,
-} from "../application/commands/finance-mutation";
+import type { Transaction } from
+    "../domain/finance/transaction";
+
+import type { Account } from
+    "../domain/finance/account";
+
+import type { TransactionChanges } from
+    "../application/commands/finance-mutation";
+
+import {
+    createCategoryCatalog,
+    assertCategoryReference,
+} from "../domain/finance/category-catalog.js";
+
+import {
+    isValidTransaction,
+} from "../domain/finance/transaction.js";
+
+import {
+    isISODate,
+} from "../domain/finance/validation.js";
+
+import { DomainError } from
+    "../domain/finance/errors.js";
 
 export type {
     TransactionChanges,
@@ -13,41 +31,71 @@ export function updateTransaction(
     db: IDBDatabase,
     expected: Transaction,
     changes: TransactionChanges,
-    maxDate: string,
+    maxDate: string
 ): Promise<void> {
+
     return new Promise((resolve, reject) => {
+
         const tx = db.transaction(
-            ["accounts", "transactions"],
+            [
+                "accounts",
+                "transactions",
+                "categories",
+            ],
             "readwrite"
         );
 
-        const store = tx.objectStore("transactions");
+        const store =
+            tx.objectStore("transactions");
 
-        const entryRequest = store.get(expected.id);
+        const entryRequest =
+            store.get(expected.id);
 
-        const accountRequest = tx
-            .objectStore("accounts")
-            .get(expected.accountId);
+        const categoryRequest =
+            tx.objectStore("categories").getAll();
 
-        let reason = "Không cập nhật được giao dịch.";
+        const accountRequest =
+            tx.objectStore("accounts")
+                .get(expected.accountId);
+
+        let failure: unknown;
 
         tx.oncomplete = () => resolve();
 
         tx.onabort = () => {
-            reject(tx.error ?? new Error(reason));
+
+            reject(
+                failure ??
+                tx.error ??
+                new Error(
+                    "Không cập nhật được giao dịch."
+                )
+            );
         };
 
         accountRequest.onsuccess = () => {
+
             try {
-                const entry: Transaction | undefined =
+
+                const entry:
+                    Transaction | undefined =
                     entryRequest.result;
 
-                const account: Account | undefined =
+                const account:
+                    Account | undefined =
                     accountRequest.result;
 
-                if (!entry || !account) {
-                    throw new Error(
-                        "Giao dịch hoặc tài khoản không còn tồn tại."
+                if (!entry) {
+
+                    throw new DomainError(
+                        "RECORD_NOT_FOUND"
+                    );
+                }
+
+                if (!account) {
+
+                    throw new DomainError(
+                        "ACCOUNT_NOT_FOUND"
                     );
                 }
 
@@ -55,60 +103,74 @@ export function updateTransaction(
                     JSON.stringify(entry) !==
                     JSON.stringify(expected)
                 ) {
-                    throw new Error(
-                        "Giao dịch đã thay đổi. Hãy tải lại trang."
+
+                    throw new DomainError(
+                        "RECORD_CONFLICT"
+                    );
+                }
+
+                const next: Transaction = {
+
+                    ...entry,
+
+                    kind: changes.kind,
+
+                    amountMinor:
+                        changes.amountMinor,
+
+                    date: changes.date,
+
+                    note: changes.note,
+
+                    categoryId:
+                        changes.categoryId,
+                };
+
+                if (!isValidTransaction(next)) {
+
+                    throw new DomainError(
+                        "INVALID_TRANSACTION"
                     );
                 }
 
                 if (
-                    !Number.isSafeInteger(changes.amountMinor) ||
-                    changes.amountMinor <= 0
+                    !isISODate(maxDate) ||
+
+                    next.date <
+                    account.openingBalanceDate ||
+
+                    next.date > maxDate
                 ) {
-                    throw new Error(
-                        "Số tiền phải là số nguyên dương."
+
+                    throw new DomainError(
+                        "INVALID_DATE"
                     );
                 }
 
-                if (
-                    changes.kind !== "income" &&
-                    changes.kind !== "expense"
-                ) {
-                    throw new Error("Loại giao dịch không hợp lệ.");
-                }
+                const catalog =
+                    createCategoryCatalog(
+                        categoryRequest.result
+                    );
 
-                if (
-                    changes.categoryId !== undefined &&
-                    !Object.hasOwn(
-                        categories[changes.kind],
-                        changes.categoryId
-                    )
-                ) {
-                    throw new Error("Danh mục không phù hợp.");
-                }
+                const categoryUnchanged =
 
-                const date = new Date(
-                    `${changes.date}T00:00:00Z`
+                    entry.categoryId ===
+                    next.categoryId &&
+
+                    entry.kind === next.kind;
+
+                assertCategoryReference(
+                    catalog,
+                    next.categoryId,
+                    next.kind,
+                    categoryUnchanged
                 );
 
-                if (
-                    !/^\d{4}-\d{2}-\d{2}$/.test(changes.date) ||
-                    !Number.isFinite(date.getTime()) ||
-                    date.toISOString().slice(0, 10) !== changes.date ||
-                    changes.date < account.openingBalanceDate ||
-                    changes.date > maxDate
-                ) {
-                    throw new Error("Ngày giao dịch không hợp lệ.");
-                }
-
-                store.put({
-                    ...entry,
-                    ...changes,
-                });
+                store.put(next);
 
             } catch (error) {
-                reason = error instanceof Error
-                    ? error.message
-                    : "Cập nhật thất bại.";
+
+                failure = error;
 
                 tx.abort();
             }
